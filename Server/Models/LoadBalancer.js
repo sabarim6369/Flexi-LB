@@ -1,22 +1,5 @@
 import mongoose from "mongoose";
 
-/*
- LoadBalancer document structure:
- {
-   name: String,
-   owner: ObjectId (User),
-   endpoint: String, // logical path like "/flexilb/lb1"
-   instances: [
-     {
-       id: String,
-       url: String,
-       isHealthy: Boolean,
-       metrics: { requests: Number, failures: Number, totalLatencyMs: Number }
-     }
-   ],
-   createdAt, updatedAt
- }
-*/
 const InstanceSchema = new mongoose.Schema({
   id: { type: String, required: true },
   url: { type: String, required: true },
