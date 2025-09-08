@@ -17,6 +17,7 @@ const LBSchema = new mongoose.Schema({
   endpoint: { type: String, required: true, unique: true },
   algorithm: { type: String, enum: ["round_robin", "least_conn", "random"], default: "round_robin" },
   instances: { type: [InstanceSchema], default: [] },
+  slug: { type: String, required: true, unique: true },
 }, { timestamps: true });
 
 export default mongoose.models.LoadBalancer || mongoose.model("LoadBalancer", LBSchema);

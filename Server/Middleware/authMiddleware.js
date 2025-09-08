@@ -1,17 +1,23 @@
 import { verifyToken } from "../Utils/jwt.js";
 import User from "../Models/User.js";
+import jwt from "jsonwebtoken";
 
-export async function authMiddleware(c, next) {
+export const authMiddleware = async (c, next) => {
   try {
-    const auth = c.req.headers.get("authorization") || "";
-    if (!auth || !auth.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
-    const token = auth.slice(7);
+    const authHeader = c.req.header("Authorization"); // ✅ correct
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const token = authHeader.split(" ")[1];
     const decoded = verifyToken(token);
-    const user = await User.findById(decoded.id).select("-password");
-    if (!user) return c.json({ error: "Unauthorized" }, 401);
-    c.req.user = user; // attach user to request
-    return next();
+
+    // attach user info to context
+    c.set("user", decoded);
+
+    await next();
   } catch (err) {
     return c.json({ error: "Unauthorized", details: err.message }, 401);
   }
-}
+};
+
