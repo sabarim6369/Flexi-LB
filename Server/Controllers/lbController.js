@@ -1,4 +1,5 @@
 import LoadBalancer from "../Models/LoadBalancer.js";
+import slugify from "slugify";
 
 const rrState = new Map();
 
@@ -29,22 +30,47 @@ function selectInstance(lb) {
 
 export async function createLB(c) {
   try {
-    const user = c.req.user;
-    const { name, endpoint, instances = [], algorithm = "round_robin" } = await c.req.json();
-    if (!name || !endpoint) return c.json({ error: "Invalid body" }, 400);
-    const lb = await LoadBalancer.create({
+    const user = c.get("user");
+    const { name, instances = [], algorithm = "round_robin" } = await c.req.json();
+
+    if (!name || instances.length === 0) {
+      return c.json({ error: "Invalid body" }, 400);
+    }
+
+    const baseSlug = slugify(name, { lower: true, strict: true });
+    let slug = baseSlug;
+    let counter = 1;
+
+    // Ensure uniqueness
+    while (await LoadBalancer.findOne({ slug })) {
+      slug = `${baseSlug}-${counter++}`;
+    }
+
+    let lb = await LoadBalancer.create({
       name,
-      owner: user._id,
-      endpoint,
+      owner: user.id,
+      slug,
       algorithm,
-      instances: instances.map((u, i) => ({ id: `inst-${Date.now()}-${i}`, url: u })),
+      instances: instances.map((u, i) => ({
+        id: `inst-${Date.now()}-${i}`,
+        url: u
+      })),
+      endpoint: "temp"
     });
+
+    const BASE_URL = process.env.BASE_URL || "http://localhost:3003";
+    lb.endpoint = `${BASE_URL}/proxy/${slug}`;
+    await lb.save();
+
     rrState.set(String(lb._id), 0);
+
     return c.json({ lb });
   } catch (err) {
+    console.log(err);
     return c.json({ error: err.message }, 500);
   }
 }
+
 
 export async function listLBs(c) {
   const user = c.req.user;
@@ -128,25 +154,28 @@ export async function removeInstance(c) {
 
 export async function proxyRequest(c) {
   try {
-    const lb = await LoadBalancer.findById(c.req.param("lbId"));
+    const slug = c.req.param("slug");
+    const lb = await LoadBalancer.findOne({ slug });
     if (!lb) return c.text("LB not found", 404);
+
     const target = selectInstance(lb);
     if (!target) return c.text("No healthy instances", 502);
 
     const tail = c.req.param("0") || "";
     const url = target.url.replace(/\/$/, "") + "/" + tail.replace(/^\//, "");
-    const start = Date.now();
 
+    const start = Date.now();
     const headers = {};
     for (const [k, v] of c.req.headers.entries()) headers[k] = v;
     const body = await c.req.arrayBuffer().catch(() => null);
+
     const res = await fetch(url, {
       method: c.req.method,
       headers,
       body: body && body.byteLength ? Buffer.from(body) : undefined,
     });
-    const latency = Date.now() - start;
 
+    const latency = Date.now() - start;
     const inst = lb.instances.find(i => i.id === target.id);
     if (inst) {
       inst.metrics.requests += 1;
@@ -163,6 +192,7 @@ export async function proxyRequest(c) {
     return c.text("Proxy error: " + err.message, 500);
   }
 }
+
 
 export async function getMetrics(c) {
   const lb = await LoadBalancer.findById(c.req.param("lbId"));
