@@ -2,9 +2,8 @@ import { Hono } from "hono";
 import { connectDB } from "./config/db.js";
 import authRoutes from "./Routes/auth.route.js";
 import lbRoutes from "./Routes/lb.route.js";
-
+import { startHealthChecks } from "./Services/Healthcheckservice";
 const app = new Hono();
-
 app.use("*", async (c, next) => {
   c.header("Access-Control-Allow-Origin", "*");
   c.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -28,6 +27,7 @@ const MONGO = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/flexilb";
     console.error("Startup error", err);
   }
 })();
+startHealthChecks();
 export default{
   port: PORT,
   fetch: app.fetch

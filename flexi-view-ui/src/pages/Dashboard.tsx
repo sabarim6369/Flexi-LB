@@ -4,8 +4,8 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Layout } from "@/components/ui/layout";
 import { CreateLBModal } from "@/components/modals/CreateLBModal";
+import { Sidebar } from "@/components/Sidebar";
 
 const mockLoadBalancers = [
   {
@@ -91,8 +91,16 @@ export default function Dashboard() {
   };
 
   return (
-    <Layout>
-      <div className="space-y-6">
+    <div className="flex h-screen bg-background">
+
+      {/* Sidebar */}
+      {/* <div className="flex-shrink-0 w-64 bg-gray-50 border-r border-gray-200"> */}
+        <Sidebar />
+      {/* </div> */}
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto p-6 space-y-6">
+        
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -123,7 +131,7 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
-          
+
           <Card className="shadow-sm border-border">
             <CardContent className="p-6">
               <div className="flex items-center">
@@ -137,7 +145,7 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
-          
+
           <Card className="shadow-sm border-border">
             <CardContent className="p-6">
               <div className="flex items-center">
@@ -151,7 +159,7 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
-          
+
           <Card className="shadow-sm border-border">
             <CardContent className="p-6">
               <div className="flex items-center">
@@ -187,7 +195,7 @@ export default function Dashboard() {
                   </Badge>
                 </div>
               </CardHeader>
-              
+
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
@@ -207,7 +215,7 @@ export default function Dashboard() {
                     <p className="font-semibold text-foreground">{lb.lastUpdated}</p>
                   </div>
                 </div>
-                
+
                 <div className="flex space-x-2 pt-2">
                   <Button variant="outline" size="sm" asChild>
                     <Link to={`/lb/${lb.id}`}>
@@ -242,7 +250,7 @@ export default function Dashboard() {
           onClose={() => setIsCreateModalOpen(false)}
           onSubmit={handleCreateLB}
         />
-      </div>
-    </Layout>
+      </main>
+    </div>
   );
 }
