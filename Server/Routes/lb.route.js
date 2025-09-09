@@ -22,7 +22,6 @@ router.get("/:lbId", authMiddleware, getLB);
 router.put("/:lbId", authMiddleware, updateLB);
 router.delete("/:lbId", authMiddleware, deleteLB);
 
-// Instance routes
 router.post("/:lbId/instances", authMiddleware, addInstance);
 router.put("/:lbId/instances", authMiddleware, updateInstance);
 router.delete("/:lbId/instances", authMiddleware, removeInstance);

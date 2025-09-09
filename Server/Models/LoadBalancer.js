@@ -4,6 +4,7 @@ const InstanceSchema = new mongoose.Schema({
   id: { type: String, required: true },
   url: { type: String, required: true },
   isHealthy: { type: Boolean, default: true },
+    weight: { type: Number, default: 1 },  
   metrics: {
     requests: { type: Number, default: 0 },
     failures: { type: Number, default: 0 },

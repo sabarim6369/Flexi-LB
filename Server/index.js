@@ -6,10 +6,21 @@ import { startHealthChecks } from "./Services/Healthcheckservice";
 const app = new Hono();
 app.use("*", async (c, next) => {
   c.header("Access-Control-Allow-Origin", "*");
-  c.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  c.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+  c.header(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, OPTIONS"
+  );
+
+  // respond to preflight OPTIONS requests
   if (c.req.method === "OPTIONS") return c.text("", 204);
+
   await next();
 });
+
 
 app.route("/auth", authRoutes);
 app.route("/lbs", lbRoutes);

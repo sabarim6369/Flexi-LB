@@ -9,57 +9,59 @@ import { Sidebar } from "@/components/Sidebar";
 import { toast } from "sonner"
 import { apiurl } from './../api';
 import axiosInstance from './../Utils/axiosInstance';
+import useLBStore from './../Zustand-Store/useLBStore';
 
 const mockLoadBalancers = [
-  {
-    id: 1,
-    name: "Production API Gateway",
-    endpoint: "https://api.example.com",
-    status: "active",
-    instances: 3,
-    activeInstances: 3,
-    totalRequests: 12543,
-    avgLatency: 89,
-    lastUpdated: "2 minutes ago"
-  },
-  {
-    id: 2,
-    name: "Development Environment",
-    endpoint: "https://dev-api.example.com",
-    status: "active",
-    instances: 2,
-    activeInstances: 1,
-    totalRequests: 2341,
-    avgLatency: 156,
-    lastUpdated: "5 minutes ago"
-  },
-  {
-    id: 3,
-    name: "Staging Load Balancer",
-    endpoint: "https://staging.example.com",
-    status: "warning",
-    instances: 2,
-    activeInstances: 2,
-    totalRequests: 8932,
-    avgLatency: 203,
-    lastUpdated: "1 hour ago"
-  },
-  {
-    id: 4,
-    name: "Analytics Service",
-    endpoint: "https://analytics.example.com",
-    status: "inactive",
-    instances: 1,
-    activeInstances: 0,
-    totalRequests: 0,
-    avgLatency: 0,
-    lastUpdated: "3 hours ago"
-  }
+  // {
+  //   id: 1,
+  //   name: "Production API Gateway",
+  //   endpoint: "https://api.example.com",
+  //   status: "active",
+  //   instances: 3,
+  //   activeInstances: 3,
+  //   totalRequests: 12543,
+  //   avgLatency: 89,
+  //   lastUpdated: "2 minutes ago"
+  // },
+  // {
+  //   id: 2,
+  //   name: "Development Environment",
+  //   endpoint: "https://dev-api.example.com",
+  //   status: "active",
+  //   instances: 2,
+  //   activeInstances: 1,
+  //   totalRequests: 2341,
+  //   avgLatency: 156,
+  //   lastUpdated: "5 minutes ago"
+  // },
+  // {
+  //   id: 3,
+  //   name: "Staging Load Balancer",
+  //   endpoint: "https://staging.example.com",
+  //   status: "warning",
+  //   instances: 2,
+  //   activeInstances: 2,
+  //   totalRequests: 8932,
+  //   avgLatency: 203,
+  //   lastUpdated: "1 hour ago"
+  // },
+  // {
+  //   id: 4,
+  //   name: "Analytics Service",
+  //   endpoint: "https://analytics.example.com",
+  //   status: "inactive",
+  //   instances: 1,
+  //   activeInstances: 0,
+  //   totalRequests: 0,
+  //   avgLatency: 0,
+  //   lastUpdated: "3 hours ago"
+  // }
 ];
 
 export default function Dashboard() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [loadBalancers, setLoadBalancers] = useState(mockLoadBalancers);
+  // const [loadBalancers, setLoadBalancers] = useState(mockLoadBalancers);
+    const { loadBalancers, setLoadBalancers, addLoadBalancer } = useLBStore();
 
   // const handleCreateLB =async (newLB) => {
   //   const lb = {
@@ -86,7 +88,7 @@ export default function Dashboard() {
           name: lb.name,
           endpoint: lb.endpoint,
           status: "active", 
-          instances: lb.instances.length,
+          instances: lb.instances,
           activeInstances: lb.instances.filter(i => i.isHealthy).length,
           totalRequests: lb.instances.reduce((sum, i) => sum + (i.metrics?.requests || 0), 0),
           avgLatency: lb.instances.length > 0 
@@ -132,7 +134,7 @@ export default function Dashboard() {
 
     if (res.data) {
       toast.success("Load Balancer created successfully 🎉");
-      setLoadBalancers(prev => [...prev, lb]);
+setLoadBalancers([...loadBalancers, lb]);
     }
   } catch (error) {
     console.error("Error creating LB:", error);
@@ -269,7 +271,7 @@ export default function Dashboard() {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-text-secondary">Instances</p>
-                    <p className="font-semibold text-foreground">{lb.activeInstances}/{lb.instances}</p>
+                    <p className="font-semibold text-foreground">{lb.activeInstances}/{lb.instances.length}</p>
                   </div>
                   <div>
                     <p className="text-text-secondary">Requests</p>

@@ -10,23 +10,34 @@ function selectInstance(lb) {
   switch (lb.algorithm) {
     case "round_robin": {
       const key = String(lb._id);
+
+      // Expand list by weight → [A,A,B] if A=2, B=1
+      const weightedList = healthy.flatMap(inst =>
+        Array(inst.weight).fill(inst)
+      );
+
       const last = rrState.get(key) ?? -1;
-      const idx = (last + 1) % healthy.length;
+      const idx = (last + 1) % weightedList.length;
       rrState.set(key, idx);
-      return healthy[idx];
+
+      return weightedList[idx];
     }
+
     case "least_conn":
       return healthy.reduce((a, b) => {
         const aReq = a.metrics.requests - a.metrics.failures;
         const bReq = b.metrics.requests - b.metrics.failures;
         return aReq <= bReq ? a : b;
       });
+
     case "random":
       return healthy[Math.floor(Math.random() * healthy.length)];
+
     default:
       return healthy[0];
   }
 }
+
 
 export async function createLB(c) {
   try {
@@ -40,8 +51,6 @@ export async function createLB(c) {
     const baseSlug = slugify(name, { lower: true, strict: true });
     let slug = baseSlug;
     let counter = 1;
-
-    // Ensure uniqueness
     while (await LoadBalancer.findOne({ slug })) {
       slug = `${baseSlug}-${counter++}`;
     }
@@ -51,10 +60,11 @@ export async function createLB(c) {
       owner: user.id,
       slug,
       algorithm,
-      instances: instances.map((u, i) => ({
-        id: `inst-${Date.now()}-${i}`,
-        url: u
-      })),
+       instances: instances.map((inst, i) => ({
+    id: `inst-${Date.now()}-${i}`,
+    url: inst.url,
+    weight: inst.weight ?? 1,   
+  })),
       endpoint: "temp"
     });
 
@@ -114,26 +124,37 @@ export async function deleteLB(c) {
 
 export async function addInstance(c) {
   try {
-    const { url } = await c.req.json();
+    const { url, weight = 1 } = await c.req.json();
     const lb = await LoadBalancer.findById(c.req.param("lbId"));
     if (!lb) return c.json({ error: "LB not found" }, 404);
-    lb.instances.push({ id: `inst-${Date.now()}`, url, isHealthy: true });
+
+    lb.instances.push({
+      id: `inst-${Date.now()}`,
+      url,
+      weight,
+      isHealthy: true
+    });
+
     await lb.save();
     return c.json({ lb });
   } catch (err) {
     return c.json({ error: err.message }, 500);
   }
 }
+
 
 export async function updateInstance(c) {
   try {
-    const { instId, url, isHealthy } = await c.req.json();
+    const { id, url, weight } = await c.req.json();
     const lb = await LoadBalancer.findById(c.req.param("lbId"));
     if (!lb) return c.json({ error: "LB not found" }, 404);
-    const inst = lb.instances.find(i => i.id === instId);
-    if (!inst) return c.json({ error: "Instance not found" }, 404);
-    if (url) inst.url = url;
-    if (isHealthy !== undefined) inst.isHealthy = isHealthy;
+
+    const instance = lb.instances.find(inst => inst.id === id);
+    if (!instance) return c.json({ error: "Instance not found" }, 404);
+
+    if (url) instance.url = url;
+    if (weight) instance.weight = weight;
+
     await lb.save();
     return c.json({ lb });
   } catch (err) {
@@ -141,18 +162,22 @@ export async function updateInstance(c) {
   }
 }
 
+
 export async function removeInstance(c) {
   try {
-    const { instId } = await c.req.json();
+    const { id } = await c.req.json();  // match frontend
     const lb = await LoadBalancer.findById(c.req.param("lbId"));
     if (!lb) return c.json({ error: "LB not found" }, 404);
-    lb.instances = lb.instances.filter(i => i.id !== instId);
+
+    lb.instances = lb.instances.filter(i => i.id !== id);
+
     await lb.save();
     return c.json({ lb });
   } catch (err) {
     return c.json({ error: err.message }, 500);
   }
 }
+
 
 export async function proxyRequest(c) {
   try {

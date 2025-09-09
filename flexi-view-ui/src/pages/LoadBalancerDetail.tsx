@@ -1,6 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Server, Edit, Trash2, Plus, Activity, AlertCircle, CheckCircle, XCircle } from "lucide-react";
+import axios from "axios";
+import { 
+  ArrowLeft, Server, Edit, Trash2, Plus, Activity, AlertCircle, 
+  CheckCircle, XCircle 
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +12,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Layout } from "@/components/ui/layout";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import useLBStore from './../Zustand-Store/useLBStore';
+import { apiurl } from './../api';
+import axiosInstance from './../Utils/axiosInstance';
+import { toast } from "sonner";
 
 const mockLoadBalancer = {
   id: 1,
@@ -16,19 +24,43 @@ const mockLoadBalancer = {
   status: "active",
   created: "2024-01-15",
   lastUpdated: "2 minutes ago",
-  servers: [
-    { id: 1, url: "https://server1.example.com", weight: 3, status: "active", responseTime: 89 },
-    { id: 2, url: "https://server2.example.com", weight: 2, status: "active", responseTime: 92 },
-    { id: 3, url: "https://server3.example.com", weight: 1, status: "inactive", responseTime: 0 },
-  ]
+  instances: [],
+  algorithm:"",
 };
 
 export default function LoadBalancerDetail() {
   const { id } = useParams();
+  const { loadBalancers, setLoadBalancers, updateLoadBalancer } = useLBStore();
+
+  const [lbData, setLbData] = useState({ ...mockLoadBalancer });
   const [isAddServerModalOpen, setIsAddServerModalOpen] = useState(false);
   const [isEditingLB, setIsEditingLB] = useState(false);
-  const [lbData, setLbData] = useState(mockLoadBalancer);
   const [newServer, setNewServer] = useState({ url: "", weight: 1 });
+  const [editingServerId, setEditingServerId] = useState<string | null>(null);
+  const [editingServerData, setEditingServerData] = useState({ url: "", weight: 1 });
+
+  useEffect(() => {
+    const lb = loadBalancers.find((lb) => lb.id.toString() === id);
+    if (lb) setLbData(lb);
+  }, [loadBalancers, id]);
+
+  useEffect(() => {
+    const fetchLB = async () => {
+      try {
+        const lbInStore = loadBalancers.find(lb => lb.id.toString() === id);
+        if (!lbInStore) {
+          const res = await axios.get(`${apiurl}/lbs/${id}`);
+          if (res.data.lb) {
+            setLbData(res.data.lb);
+            setLoadBalancers([...loadBalancers, res.data.lb]);
+          }
+        }
+      } catch (err) {
+        toast.error("Error fetching Load Balancer");
+      }
+    };
+    fetchLB();
+  }, [id, loadBalancers, setLoadBalancers]);
 
   const getServerStatusIcon = (status) => {
     switch(status) {
@@ -48,39 +80,80 @@ export default function LoadBalancerDetail() {
     return variants[status] || "bg-muted text-muted-foreground";
   };
 
-  const handleAddServer = () => {
-    if (newServer.url) {
-      const server = {
-        id: Date.now(),
-        ...newServer,
-        status: "active",
-        responseTime: Math.floor(Math.random() * 200) + 50
-      };
-      setLbData(prev => ({
-        ...prev,
-        servers: [...prev.servers, server]
-      }));
-      setNewServer({ url: "", weight: 1 });
-      setIsAddServerModalOpen(false);
+  const handleAddServer = async () => {
+    if (!newServer.url) return;
+    try {
+      const res = await axiosInstance.post(`${apiurl}/lbs/${lbData.id}/instances`, {
+        url: newServer.url,
+        weight: newServer.weight
+      });
+      if (res.data.lb) {
+        setLbData(res.data.lb);
+        updateLoadBalancer(lbData.id, res.data.lb);
+        setNewServer({ url: "", weight: 1 });
+        setIsAddServerModalOpen(false);
+        toast.success("Server added successfully");
+      }
+    } catch (err) {
+      toast.error("Failed to add server instance");
     }
   };
 
-  const handleRemoveServer = (serverId) => {
-    setLbData(prev => ({
-      ...prev,
-      servers: prev.servers.filter(s => s.id !== serverId)
-    }));
+  const handleUpdateServer = async (serverId: string) => {
+    try {
+      const res = await axiosInstance.put(`${apiurl}/lbs/${lbData.id}/instances`, {
+        id: serverId,
+        url: editingServerData.url,
+        weight: editingServerData.weight
+      });
+      if (res.data.lb) {
+        setLbData(res.data.lb);
+        updateLoadBalancer(lbData.id, res.data.lb);
+        setEditingServerId(null);
+        toast.success("Server updated successfully");
+      }
+    } catch (err) {
+      toast.error("Failed to update server instance");
+    }
   };
 
-  const handleUpdateLB = () => {
-    setIsEditingLB(false);
-    // In real app, would save to backend
+  const handleRemoveServer = async (serverId: string) => {
+    try {
+      const res = await axiosInstance.delete(`${apiurl}/lbs/${lbData.id}/instances`, {
+        data: { id: serverId }
+      });
+      if (res.data.lb) {
+        setLbData(res.data.lb);
+        updateLoadBalancer(lbData.id, res.data.lb);
+        toast.success("Server removed successfully");
+      }
+    } catch (err) {
+      toast.error("Failed to remove server instance");
+    }
   };
+
+  const handleUpdateLB = async () => {
+  try {
+    const res = await axiosInstance.put(`${apiurl}/lbs/${lbData.id}`, {
+      name: lbData.name,
+      endpoint: lbData.endpoint,
+      algorithm: lbData.algorithm, // added
+    });
+    if (res.data.lb) {
+      updateLoadBalancer(lbData.id, res.data.lb);
+      setLbData(res.data.lb);
+      setIsEditingLB(false);
+      toast.success("Load Balancer updated successfully");
+    }
+  } catch (err) {
+    toast.error("Failed to update Load Balancer");
+  }
+};
+
 
   return (
     <Layout>
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center space-x-4">
           <Button variant="ghost" size="sm" asChild>
             <Link to="/dashboard">
@@ -90,7 +163,6 @@ export default function LoadBalancerDetail() {
           </Button>
         </div>
 
-        {/* Load Balancer Info */}
         <Card className="shadow-sm border-border">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -99,28 +171,44 @@ export default function LoadBalancerDetail() {
                   <Activity className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  {isEditingLB ? (
-                    <Input
-                      value={lbData.name}
-                      onChange={(e) => setLbData(prev => ({ ...prev, name: e.target.value }))}
-                      className="text-xl font-bold bg-input border-border"
-                    />
-                  ) : (
-                    <CardTitle className="text-2xl font-bold text-foreground">{lbData.name}</CardTitle>
-                  )}
-                  {isEditingLB ? (
-                    <Input
-                      value={lbData.endpoint}
-                      onChange={(e) => setLbData(prev => ({ ...prev, endpoint: e.target.value }))}
-                      className="text-text-secondary bg-input border-border mt-1"
-                    />
-                  ) : (
-                    <CardDescription className="text-text-secondary">{lbData.endpoint}</CardDescription>
-                  )}
+                {isEditingLB ? (
+  <>
+    <Input
+      value={lbData.name || ""}
+      onChange={(e) => setLbData(prev => ({ ...prev, name: e.target.value }))}
+      className="text-xl font-bold bg-input border-border"
+    />
+    <Input
+      value={lbData.endpoint || ""}
+      onChange={(e) => setLbData(prev => ({ ...prev, endpoint: e.target.value }))}
+      className="text-text-secondary bg-input border-border mt-1"
+    />
+    <div className="mt-2">
+      <Label htmlFor="algorithm" className="text-foreground">Algorithm</Label>
+      <select
+        id="algorithm"
+        value={lbData.algorithm || "round-robin"}
+        onChange={(e) => setLbData(prev => ({ ...prev, algorithm: e.target.value }))}
+        className="w-full mt-1 p-2 border border-border rounded bg-input"
+      >
+        <option value="round-robin">Round Robin</option>
+        <option value="least-connections">Least Connections</option>
+        <option value="ip-hash">IP Hash</option>
+      </select>
+    </div>
+  </>
+) : (
+  <>
+    <CardTitle className="text-2xl font-bold text-foreground">{lbData.name || "Unknown LB"}</CardTitle>
+    <CardDescription className="text-text-secondary">{lbData.endpoint || "-"}</CardDescription>
+    <p className="mt-1 text-sm text-text-secondary capitalize">Algorithm: {lbData.algorithm || "round-robin"}</p>
+  </>
+)}
+
                 </div>
               </div>
               <div className="flex items-center space-x-2">
-                <Badge className="bg-success text-success-foreground">Active</Badge>
+                <Badge className="bg-success text-success-foreground">{lbData.status || "active"}</Badge>
                 {isEditingLB ? (
                   <div className="flex space-x-2">
                     <Button size="sm" onClick={handleUpdateLB}>Save</Button>
@@ -139,29 +227,26 @@ export default function LoadBalancerDetail() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <p className="text-sm text-text-secondary">Created</p>
-                <p className="font-medium text-foreground">{lbData.created}</p>
+                <p className="font-medium text-foreground">{lbData.created || "-"}</p>
               </div>
               <div>
                 <p className="text-sm text-text-secondary">Last Updated</p>
-                <p className="font-medium text-foreground">{lbData.lastUpdated}</p>
+                <p className="font-medium text-foreground">{lbData.lastUpdated || "-"}</p>
               </div>
               <div>
                 <p className="text-sm text-text-secondary">Total Servers</p>
-                <p className="font-medium text-foreground">{lbData.servers.length}</p>
+                <p className="font-medium text-foreground">{(lbData.instances || []).length}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Server Instances */}
         <Card className="shadow-sm border-border">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-xl font-semibold text-foreground">Server Instances</CardTitle>
-                <CardDescription className="text-text-secondary">
-                  Manage server instances for this load balancer
-                </CardDescription>
+                <CardDescription className="text-text-secondary">Manage server instances for this load balancer</CardDescription>
               </div>
               <Button 
                 onClick={() => setIsAddServerModalOpen(true)}
@@ -174,7 +259,7 @@ export default function LoadBalancerDetail() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {lbData.servers.map((server) => (
+              {(lbData.instances || []).map((server) => (
                 <div key={server.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border border-border">
                   <div className="flex items-center space-x-4">
                     <div className="bg-card p-2 rounded-lg border border-border">
@@ -182,23 +267,54 @@ export default function LoadBalancerDetail() {
                     </div>
                     <div>
                       <div className="flex items-center space-x-2">
-                        <p className="font-medium text-foreground">{server.url}</p>
+                        {editingServerId === server.id ? (
+                          <Input
+                            value={editingServerData.url}
+                            onChange={(e) => setEditingServerData(prev => ({ ...prev, url: e.target.value }))}
+                            className="text-foreground"
+                          />
+                        ) : (
+                          <p className="font-medium text-foreground">{server.url}</p>
+                        )}
                         {getServerStatusIcon(server.status)}
                       </div>
                       <div className="flex items-center space-x-4 mt-1 text-sm text-text-secondary">
-                        <span>Weight: {server.weight}</span>
-                        <span>Response: {server.responseTime}ms</span>
+                        {editingServerId === server.id ? (
+                          <Input
+                            type="number"
+                            min={1}
+                            max={10}
+                            value={editingServerData.weight}
+                            onChange={(e) => setEditingServerData(prev => ({ ...prev, weight: parseInt(e.target.value) || 1 }))}
+                            className="w-16"
+                          />
+                        ) : (
+                          <>
+                            <span>Weight: {server.weight}</span>
+                            <span>Response: {server.responseTime}ms</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
+
                   <div className="flex items-center space-x-2">
-                    <Badge className={`${getServerStatusBadge(server.status)} capitalize`}>
-                      {server.status}
-                    </Badge>
-                    <Button variant="outline" size="sm">
-                      <Edit className="h-3 w-3 mr-1" />
-                      Edit
-                    </Button>
+                    <Badge className={`${getServerStatusBadge(server.status)} capitalize`}>{server.status}</Badge>
+
+                    {editingServerId === server.id ? (
+                      <>
+                        <Button size="sm" onClick={() => handleUpdateServer(server.id)}>Save</Button>
+                        <Button variant="outline" size="sm" onClick={() => setEditingServerId(null)}>Cancel</Button>
+                      </>
+                    ) : (
+                      <Button variant="outline" size="sm" onClick={() => {
+                        setEditingServerId(server.id);
+                        setEditingServerData({ url: server.url, weight: server.weight });
+                      }}>
+                        <Edit className="h-3 w-3 mr-1" /> Edit
+                      </Button>
+                    )}
+
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -215,7 +331,6 @@ export default function LoadBalancerDetail() {
           </CardContent>
         </Card>
 
-        {/* Add Server Modal */}
         <Dialog open={isAddServerModalOpen} onOpenChange={setIsAddServerModalOpen}>
           <DialogContent>
             <DialogHeader>
@@ -249,12 +364,8 @@ export default function LoadBalancerDetail() {
               </div>
             </div>
             <DialogFooter className="flex space-x-2">
-              <Button variant="outline" onClick={() => setIsAddServerModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleAddServer} className="bg-primary hover:bg-secondary text-primary-foreground">
-                Add Server
-              </Button>
+              <Button variant="outline" onClick={() => setIsAddServerModalOpen(false)}>Cancel</Button>
+              <Button onClick={handleAddServer} className="bg-primary hover:bg-secondary text-primary-foreground">Add Server</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

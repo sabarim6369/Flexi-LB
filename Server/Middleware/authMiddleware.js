@@ -5,6 +5,7 @@ import User from "../Models/User.js";
 export const authMiddleware = async (c, next) => {
   try {
     const authHeader = c.req.header("Authorization"); 
+    
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return c.json({ error: "Unauthorized" }, 401);
     }
