@@ -10,11 +10,23 @@ export const checkInstanceHealth = async (lbId, instance) => {
     instance.isHealthy = true;
     instance.metrics.requests += 1;
     instance.metrics.totalLatencyMs += latency;
+    instance.metrics.lastLatency = latency;
+
+    // ✅ Classify health based on response time
+    if (latency < 200) {
+      instance.healthStatus = "healthy";
+    } else if (latency < 500) {
+      instance.healthStatus = "degraded";
+    } else {
+      instance.healthStatus = "slow";
+    }
   } catch (err) {
     instance.isHealthy = false;
+    instance.healthStatus = "down";
     instance.metrics.failures += 1;
   }
 };
+
 
 export const updateAllLBsHealth = async () => {
   const lbs = await LoadBalancer.find();
@@ -34,5 +46,5 @@ export const startHealthChecks = () => {
     } catch (err) {
       console.error("Health check error:", err);
     }
-  }, 10000); 
+  }, 5000); 
 };
