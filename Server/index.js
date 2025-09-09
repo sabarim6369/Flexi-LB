@@ -29,7 +29,7 @@ app.all("/proxy/:slug/*", proxyRequest);
 app.all("/proxy/:slug", proxyRequest);
 
 const PORT = process.env.PORT || 3003;
-const MONGO = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/flexilb";
+const MONGO = process.env.MONGO_URI;
 
 (async () => {
   try {
