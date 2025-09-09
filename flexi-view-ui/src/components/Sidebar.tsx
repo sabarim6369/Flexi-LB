@@ -1,21 +1,20 @@
 import { useState, useEffect } from "react";
 import { Plus, Server, Activity, AlertCircle, Globe, Settings } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 export function Sidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const navItems = [
     { name: "Dashboard", icon: Activity, path: "/dashboard" },
-    // { name: "Load Balancers", icon: Server, path: "/lbs" },
     { name: "Metrics", icon: Globe, path: "/metrics" },
     { name: "Alerts", icon: AlertCircle, path: "/alerts" },
     { name: "Settings", icon: Settings, path: "/settings" },
   ];
-
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -23,6 +22,12 @@ export function Sidebar() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  // signout handler
+  const handleSignOut = () => {
+    localStorage.removeItem("token"); // remove token
+    navigate("/login", { replace: true }); // redirect to login
+  };
 
   // Sidebar content
   const sidebarContent = (
@@ -35,9 +40,16 @@ export function Sidebar() {
       <div>
         {/* Logo / Title */}
         <div className="flex items-center justify-between mb-10 mt-4">
-          {!isCollapsed && <h2 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-wide">FlexiLB</h2>}
+          {!isCollapsed && (
+            <h2 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-wide">
+              FlexiLB
+            </h2>
+          )}
           {!isMobile && (
-            <button onClick={() => setIsCollapsed(!isCollapsed)} className="p-1 rounded hover:bg-secondary/20 transition">
+            <button
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="p-1 rounded hover:bg-secondary/20 transition"
+            >
               {isCollapsed ? "→" : "←"}
             </button>
           )}
@@ -54,9 +66,17 @@ export function Sidebar() {
                 to={item.path}
                 onClick={() => isMobile && setMobileOpen(false)}
                 className={`flex items-center gap-3 p-2 rounded transition
-                  ${isActive ? "bg-blue-500 text-white font-semibold" : "text-foreground hover:bg-primary/10 font-normal"}`}
+                  ${
+                    isActive
+                      ? "bg-blue-500 text-white font-semibold"
+                      : "text-foreground hover:bg-primary/10 font-normal"
+                  }`}
               >
-                <Icon className={`h-5 w-5 ${isActive ? "text-white" : "text-foreground"}`} />
+                <Icon
+                  className={`h-5 w-5 ${
+                    isActive ? "text-white" : "text-foreground"
+                  }`}
+                />
                 {!isCollapsed && <span>{item.name}</span>}
               </Link>
             );
@@ -70,7 +90,10 @@ export function Sidebar() {
           <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white text-lg font-bold">
             P
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 bg-destructive text-destructive-foreground rounded hover:bg-destructive/80 transition w-full justify-center">
+          <button
+            onClick={handleSignOut}
+            className="flex items-center gap-2 px-4 py-2 bg-destructive text-destructive-foreground rounded hover:bg-destructive/80 transition w-full justify-center"
+          >
             Sign Out
           </button>
         </div>

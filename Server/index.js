@@ -22,7 +22,7 @@ app.use("*", async (c, next) => {
   await next();
 });
 
-
+require("./Services/EmailService.js")
 app.route("/auth", authRoutes);
 app.route("/lbs", lbRoutes);
 app.all("/proxy/:slug/*", proxyRequest);

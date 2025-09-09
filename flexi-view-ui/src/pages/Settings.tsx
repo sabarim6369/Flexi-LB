@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { User, Bell, Shield, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -5,18 +6,90 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Sidebar } from "@/components/Sidebar";
+import axiosInstance from "@/utils/axiosInstance"; 
+import { apiurl } from './../api';
+import { toast } from "sonner";
 
 export default function Settings() {
+  const [profile, setProfile] = useState({ username: "", email: "" });
+  const [notifications, setNotifications] = useState({
+    emailAlerts: false,
+    serverDownAlerts: false,
+    performanceAlerts: false,
+    weeklyReports: false,
+  });
+  const [passwords, setPasswords] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+
+  // Fetch profile and notification data on mount
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        // Profile
+        const { data: profileData } = await axiosInstance.get(`${apiurl}/auth/user/byid`);
+        setProfile({ username: profileData.user.username, email: profileData.user.email });
+
+        // Notifications
+        const { data: notifData } = await axiosInstance.get(`${apiurl}/auth/user/notifications`);
+        setNotifications(notifData.notifications || notifications);
+      } catch (err) {
+        console.error(err);
+        toast.error(err.response?.data?.error || "Failed to load settings");
+      }
+    }
+    fetchData();
+  }, []);
+
+  // Handle profile save
+  const saveProfile = async () => {
+    try {
+      const { data } = await axiosInstance.put(`${apiurl}/auth/user/profile`, { username: profile.username, email: profile.email });
+      setProfile(data.user);
+      toast.success("Profile updated successfully!");
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || "Failed to update profile");
+    }
+  };
+
+  const changePassword = async () => {
+    if (passwords.newPassword !== passwords.confirmPassword) {
+      return toast.error("New password and confirm password do not match");
+    }
+    try {
+await axiosInstance.put(`${apiurl}/auth/user/password`, {
+  oldPassword: passwords.currentPassword,
+  newPassword: passwords.newPassword,
+});
+      toast.success("Password updated successfully!");
+      setPasswords({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || "Failed to update password");
+    }
+  };
+
+  // Handle notification toggle
+  const toggleNotification = async (key) => {
+    try {
+      const updated = { ...notifications, [key]: !notifications[key] };
+      await axiosInstance.put(`${apiurl}/auth/user/notifications`, { notifications: updated });
+      setNotifications(updated);
+      toast.success(`${key} ${updated[key] ? "enabled" : "disabled"}`);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || "Failed to update notifications");
+    }
+  };
+
   return (
     <div className="flex h-screen">
       {/* Sidebar */}
-        <div className="w-64 h-screen sticky top-0">
+      <div className="w-64 h-screen sticky top-0">
         <Sidebar />
       </div>
 
-      {/* Main Content - scrollable */}
+      {/* Main Content */}
       <div className="flex-1 p-6 space-y-6 overflow-y-auto h-screen">
-        {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-foreground">Settings</h1>
           <p className="text-text-secondary mt-1">
@@ -39,18 +112,24 @@ export default function Settings() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name" className="text-foreground">Full Name</Label>
-                <Input id="name" placeholder="Your full name" className="bg-input border-border" />
+                <Input
+                  id="name"
+                  value={profile.username}
+                  onChange={(e) => setProfile(prev => ({ ...prev, username: e.target.value }))}
+                  className="bg-input border-border"
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-foreground">Email</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="your.email@example.com"
+                  value={profile.email}
+                  onChange={(e) => setProfile(prev => ({ ...prev, email: e.target.value }))}
                   className="bg-input border-border"
                 />
               </div>
-              <Button className="bg-primary hover:bg-secondary text-primary-foreground">
+              <Button onClick={saveProfile} className="bg-primary hover:bg-secondary text-primary-foreground">
                 Save Changes
               </Button>
             </CardContent>
@@ -68,34 +147,20 @@ export default function Settings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-foreground">Email Alerts</p>
-                  <p className="text-sm text-text-secondary">Receive email notifications for critical events</p>
+              {[
+                { key: "emailAlerts", title: "Email Alerts", desc: "Receive email notifications for critical events" },
+                { key: "serverDownAlerts", title: "Server Down Alerts", desc: "Get notified when servers go offline" },
+                { key: "performanceAlerts", title: "Performance Alerts", desc: "Alerts for latency and error rate thresholds" },
+                { key: "weeklyReports", title: "Weekly Reports", desc: "Weekly performance summary emails" },
+              ].map(n => (
+                <div key={n.key} className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-foreground">{n.title}</p>
+                    <p className="text-sm text-text-secondary">{n.desc}</p>
+                  </div>
+                  <Switch checked={notifications[n.key]} onClick={() => toggleNotification(n.key)} />
                 </div>
-                <Switch />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-foreground">Server Down Alerts</p>
-                  <p className="text-sm text-text-secondary">Get notified when servers go offline</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-foreground">Performance Alerts</p>
-                  <p className="text-sm text-text-secondary">Alerts for latency and error rate thresholds</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-foreground">Weekly Reports</p>
-                  <p className="text-sm text-text-secondary">Weekly performance summary emails</p>
-                </div>
-                <Switch />
-              </div>
+              ))}
             </CardContent>
           </Card>
 
@@ -113,17 +178,35 @@ export default function Settings() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="currentPassword" className="text-foreground">Current Password</Label>
-                <Input id="currentPassword" type="password" className="bg-input border-border" />
+                <Input
+                  id="currentPassword"
+                  type="password"
+                  value={passwords.currentPassword}
+                  onChange={(e) => setPasswords(prev => ({ ...prev, currentPassword: e.target.value }))}
+                  className="bg-input border-border"
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="newPassword" className="text-foreground">New Password</Label>
-                <Input id="newPassword" type="password" className="bg-input border-border" />
+                <Input
+                  id="newPassword"
+                  type="password"
+                  value={passwords.newPassword}
+                  onChange={(e) => setPasswords(prev => ({ ...prev, newPassword: e.target.value }))}
+                  className="bg-input border-border"
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword" className="text-foreground">Confirm New Password</Label>
-                <Input id="confirmPassword" type="password" className="bg-input border-border" />
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={passwords.confirmPassword}
+                  onChange={(e) => setPasswords(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                  className="bg-input border-border"
+                />
               </div>
-              <Button className="bg-primary hover:bg-secondary text-primary-foreground">
+              <Button onClick={changePassword} className="bg-primary hover:bg-secondary text-primary-foreground">
                 Update Password
               </Button>
             </CardContent>
