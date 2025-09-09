@@ -239,7 +239,6 @@ function pickInstance(lb, clientIp) {
       return healthyInstances[0]; // fallback
   }
 }
-
 export async function proxyRequest(c) {
   const slug = c.req.param("slug");
   const path = c.req.param("*") || "";
@@ -254,12 +253,21 @@ export async function proxyRequest(c) {
     c.req.header("x-real-ip") ||
     "127.0.0.1";
 
-  // pick instance using algorithm
-const instance = pickInstance(lb, clientIp);
-if (!instance) {
-  return c.json({ error: "No healthy instances available" }, 503);
-}
+  const instance = pickInstance(lb, clientIp);
+  if (!instance) {
+    return c.json({ error: "No healthy instances available" }, 503);
+  }
 
+  instance.metrics.requests = (instance.metrics.requests || 0) + 1;
+  instance.metrics.todayRequests = (instance.metrics.todayRequests || 0) + 1;
+
+ const now = new Date();
+const hourKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}-${String(now.getHours()).padStart(2,'0')}`;
+
+  const prevCount = instance.metrics.hourlyRequests?.get(hourKey) || 0;
+  instance.metrics.hourlyRequests.set(hourKey, prevCount + 1);
+
+  await lb.save(); // Save updated metrics
 
   try {
     const targetUrl = `${instance.url}/${path}`;
@@ -288,11 +296,11 @@ if (!instance) {
     );
   } catch (err) {
     console.error("Proxy error", err.message);
+    instance.metrics.failures = (instance.metrics.failures || 0) + 1;
+    await lb.save(); // Save failure count too
     return c.json({ error: "Proxy request failed" }, 500);
   }
 }
-
-
 
 export async function getMetrics(c) {
   const lb = await LoadBalancer.findById(c.req.param("lbId"));
@@ -305,3 +313,130 @@ export async function getMetrics(c) {
     }))
   });
 }
+
+export const getLBMetrics = async (c) => {
+  try {
+    const id = c.req.param("id"); // Hono param
+
+    const lb = await LoadBalancer.findById(id).populate("owner", "name email");
+    if (!lb) {
+      return c.json({ error: "Load Balancer not found" }, 404);
+    }
+
+    // Initialize metrics
+    const metrics = {
+      totalRequests: 0,
+      requestsToday: 0,
+      avgLatency: 0,
+      errorRate: 0,
+      successRate: 0,
+      uptime: 100,
+      bandwidth: 0,
+      hourlyRequests: Array(24).fill(0),
+    };
+
+    let totalLatencySum = 0;
+    let failureSum = 0;
+
+    // Prepare instances array
+    const instances = lb.instances.map((inst) => {
+      const instRequests = inst.metrics.requests || 0;
+      const instFailures = inst.metrics.failures || 0;
+      const instLatency = inst.metrics.lastLatency || 0;
+      const instRequestsToday = inst.metrics.todayRequests || 0;
+
+      metrics.totalRequests += instRequests;
+      metrics.requestsToday += instRequestsToday;
+      totalLatencySum += instLatency;
+      failureSum += instFailures;
+
+      // Merge hourlyRequests
+      inst.metrics.hourlyRequests?.forEach((r, idx) => {
+        metrics.hourlyRequests[idx] += r;
+      });
+
+      return {
+        id: inst.id || inst._id,
+        url: inst.url,
+        healthStatus: inst.isHealthy
+          ? inst.metrics.lastLatency < 200
+            ? "healthy"
+            : "slow"
+          : "down",
+        isHealthy: inst.isHealthy,
+        weight: inst.weight,
+        metrics: {
+          requests: instRequests,
+          failures: instFailures,
+          totalLatencyMs: inst.metrics.totalLatencyMs || 0,
+          lastLatency: instLatency,
+          bandwidth: inst.metrics.bandwidth || 0,
+          uptime: inst.metrics.uptime || 100,
+          todayRequests: instRequestsToday,
+          hourlyRequests: inst.metrics.hourlyRequests || [],
+        },
+      };
+    });
+
+    const instanceCount = lb.instances.length || 1;
+    metrics.avgLatency = Math.round(totalLatencySum / instanceCount);
+    metrics.errorRate = metrics.totalRequests
+      ? Number(((failureSum / metrics.totalRequests) * 100).toFixed(2))
+      : 0;
+    metrics.successRate = Number((100 - metrics.errorRate).toFixed(2));
+
+    // Example: bandwidth & uptime (replace with real data if available)
+    metrics.bandwidth = instances.reduce((sum, inst) => sum + (inst.metrics.bandwidth || 0), 0);
+    metrics.uptime = Math.min(
+      100,
+      Math.max(...instances.map((inst) => (inst.metrics.uptime || 100)))
+    );
+
+    // Overall status
+    const allHealthy = instances.every((i) => i.isHealthy);
+    const status = allHealthy ? "active" : instances.some((i) => i.isHealthy) ? "warning" : "error";
+
+    return c.json({
+      id: lb._id,
+      name: lb.name,
+      slug: lb.slug,
+      endpoint: lb.endpoint,
+      algorithm: lb.algorithm,
+      owner: lb.owner,
+      status,
+      metrics,
+      instances, // ✅ Send instances directly to frontend
+    });
+  } catch (err) {
+    console.error("Error fetching LB metrics:", err);
+    return c.json({ error: "Server error" }, 500);
+  }
+};
+export const getLBHourlyRequests = async (c) => {
+  try {
+    const lbId = c.req.param("id");
+    const lb = await LoadBalancer.findById(lbId);
+    if (!lb) return c.json({ error: "Load Balancer not found" }, 404);
+
+    const now = new Date();
+
+    const normalizeHourly = (hourlyRequests) => {
+      return Array.from({ length: 24 }, (_, i) => {
+        const h = String(i).padStart(2, "0");
+        const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}-${h}`;
+        return hourlyRequests.get(key) || 0;
+      });
+    };
+
+    const instances = lb.instances.map(inst => ({
+      id: inst.id,
+      url: inst.url,
+      hourlyRequests: normalizeHourly(inst.metrics.hourlyRequests || new Map())
+    }));
+
+    return c.json({ lbId: lb._id, name: lb.name, instances });
+  } catch (err) {
+    console.error(err);
+    return c.json({ error: err.message }, 500);
+  }
+};

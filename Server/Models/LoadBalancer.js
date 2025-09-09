@@ -16,7 +16,12 @@ const InstanceSchema = new mongoose.Schema({
     requests: { type: Number, default: 0 },
     failures: { type: Number, default: 0 },
     totalLatencyMs: { type: Number, default: 0 },
-    lastLatency: { type: Number, default: 0 },  // last response time
+    lastLatency: { type: Number, default: 0 },
+        hourlyRequests: { 
+      type: Map, 
+      of: Number, 
+      default: {} 
+    }  // last response time
   },
 }, { _id: false });
 

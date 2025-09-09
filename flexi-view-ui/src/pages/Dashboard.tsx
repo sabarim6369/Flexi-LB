@@ -40,21 +40,22 @@ export default function Dashboard() {
   //   const res=await axios.post(`${apiurl}/lbs`);
   //   setLoadBalancers(prev => [...prev, lb]);
   // };
- useEffect(() => {
+useEffect(() => {
   const getlbs = async () => {
     try {
       const res = await axiosInstance.get(`${apiurl}/lbs`);
-      console.log(res);
-      if (res.data && Array.isArray(res.data)) {
-        const apiLBs = res.data.lb.map((lb) => ({
-          id: lb._id, 
+      console.log("LB API Response:", res.data);
+
+      if (res.data && Array.isArray(res.data.lbs)) {
+        const apiLBs = res.data.lbs.map((lb) => ({
+          id: lb._id,
           name: lb.name,
           endpoint: lb.endpoint,
-          status: "active", 
+          status: "active",
           instances: lb.instances,
           activeInstances: lb.instances.filter(i => i.isHealthy).length,
           totalRequests: lb.instances.reduce((sum, i) => sum + (i.metrics?.requests || 0), 0),
-          avgLatency: lb.instances.length > 0 
+          avgLatency: lb.instances.length > 0
             ? Math.round(
                 lb.instances.reduce((sum, i) => sum + (i.metrics?.totalLatencyMs || 0), 0) / lb.instances.length
               )
@@ -62,20 +63,19 @@ export default function Dashboard() {
           lastUpdated: new Date(lb.updatedAt).toLocaleString(),
         }));
 
-
         setLoadBalancers([...mockLoadBalancers, ...apiLBs]);
-        setStats(res.data.stats);
+        setStats(res.data.stats || {});
       }
     } catch (error) {
       console.error("Error fetching LBs:", error);
       toast.error("Failed to load Load Balancers ❌");
-      // Keep only mock if API fails
       setLoadBalancers(mockLoadBalancers);
     }
   };
 
   getlbs();
 }, []);
+
 
  const handleCreateLB = async (newLB) => {
   try {

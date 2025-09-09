@@ -8,7 +8,7 @@ export const checkInstanceHealth = async (lbId, instance) => {
     const latency = Date.now() - start;
 
     instance.isHealthy = true;
-    instance.metrics.requests += 1;
+    // instance.metrics.requests += 1;
     instance.metrics.totalLatencyMs += latency;
     instance.metrics.lastLatency = latency;
 
