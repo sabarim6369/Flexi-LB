@@ -11,19 +11,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export function CreateLBModal({ isOpen, onClose, onSubmit }) {
   const [formData, setFormData] = useState({
     name: "",
-    instances: [{ url: "", weight: 1 }],
+    instances: [{ name: "", url: "", weight: 1 }],
     algorithm: "round_robin",
   });
 
   const addInstance = () => {
     setFormData((prev) => ({
       ...prev,
-      instances: [...prev.instances, { url: "", weight: 1 }],
+      instances: [...prev.instances, { name: "", url: "", weight: 1 }],
     }));
   };
 
@@ -43,17 +49,22 @@ export function CreateLBModal({ isOpen, onClose, onSubmit }) {
     }));
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSubmit(formData); // send to backend
-    onClose();
-    // Reset form
+ const handleSubmit = async (e) => {
+  e.preventDefault();
+  // Call parent submit and wait for result
+  const success = await onSubmit(formData); // <- expects true/false
+  if (success) {
+    // Only clear form and close modal if submission was successful
     setFormData({
       name: "",
-      instances: [{ url: "", weight: 1 }],
+      instances: [{ name: "", url: "", weight: 1 }],
       algorithm: "round_robin",
     });
-  };
+    onClose();
+  }
+  // If failed, modal stays open, toast shows error from parent
+};
+
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -90,21 +101,25 @@ export function CreateLBModal({ isOpen, onClose, onSubmit }) {
               <Label htmlFor="algorithm" className="text-foreground">
                 Algorithm
               </Label>
-              <Select
-                value={formData.algorithm}
-                onValueChange={(val) =>
-                  setFormData((prev) => ({ ...prev, algorithm: val }))
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select algorithm" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="round_robin">Round Robin (default)</SelectItem>
-                  <SelectItem value="least_conn">Least Connections</SelectItem>
-                  <SelectItem value="ip_hash">IP Hash</SelectItem>
-                </SelectContent>
-              </Select>
+            <Select
+  value={formData.algorithm}
+  onValueChange={(val) =>
+    setFormData((prev) => ({ ...prev, algorithm: val }))
+  }
+>
+  <SelectTrigger className="w-full">
+    <SelectValue placeholder="Select algorithm" />
+  </SelectTrigger>
+  <SelectContent>
+    <SelectItem value="round_robin">Round Robin (default)</SelectItem>
+    <SelectItem value="least_conn">Least Connections</SelectItem>
+    <SelectItem value="random">Random</SelectItem>
+    <SelectItem value="ip_hash">IP Hash</SelectItem>
+    <SelectItem value="weighted_round_robin">Weighted Round Robin</SelectItem>
+    <SelectItem value="least_response_time">Least Response Time</SelectItem>
+  </SelectContent>
+</Select>
+
             </div>
 
             {/* Instances */}
@@ -127,13 +142,22 @@ export function CreateLBModal({ isOpen, onClose, onSubmit }) {
                 {formData.instances.map((instance, index) => (
                   <div
                     key={index}
-                    className="flex items-center space-x-3 p-3 bg-muted rounded-lg border border-border"
+                    className="grid grid-cols-1 md:grid-cols-4 gap-3 p-3 bg-muted rounded-lg border border-border"
                   >
-                    <div className="bg-primary/10 p-2 rounded">
-                      <Server className="h-4 w-4 text-primary" />
+                    <div className="flex items-center space-x-2 col-span-4 md:col-span-1">
+                      <div className="bg-primary/10 p-2 rounded">
+                        <Server className="h-4 w-4 text-primary" />
+                      </div>
+                      <Input
+                        placeholder="Instance Name"
+                        value={instance.name}
+                        onChange={(e) =>
+                          updateInstance(index, "name", e.target.value)
+                        }
+                        required
+                      />
                     </div>
 
-                    {/* URL Input */}
                     <Input
                       placeholder="http://localhost:5001"
                       value={instance.url}
@@ -141,13 +165,13 @@ export function CreateLBModal({ isOpen, onClose, onSubmit }) {
                         updateInstance(index, "url", e.target.value)
                       }
                       required
+                      className="col-span-4 md:col-span-2"
                     />
 
-                    {/* Weight Input */}
                     <Input
                       type="number"
                       min="1"
-                      className="w-20"
+                      className="w-20 col-span-3 md:col-span-1"
                       placeholder="Weight"
                       value={instance.weight}
                       onChange={(e) =>
@@ -162,7 +186,7 @@ export function CreateLBModal({ isOpen, onClose, onSubmit }) {
                         variant="ghost"
                         size="sm"
                         onClick={() => removeInstance(index)}
-                        className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                        className="text-destructive hover:bg-destructive hover:text-destructive-foreground col-span-1"
                       >
                         <X className="h-4 w-4" />
                       </Button>

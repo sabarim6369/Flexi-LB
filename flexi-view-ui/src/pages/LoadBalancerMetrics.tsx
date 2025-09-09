@@ -1,6 +1,6 @@
 import { useParams, Link } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Activity, TrendingUp, Server, Globe, Clock, BarChart3 } from "lucide-react";
+import { ArrowLeft, Server, Clock, TrendingUp, Activity, BarChart3, Globe } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -8,26 +8,43 @@ import { Layout } from "@/components/ui/layout";
 import { Button } from "@/components/ui/button";
 import axiosInstance from './../Utils/axiosInstance';
 import { apiurl } from './../api';
+import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 export default function LoadBalancerMetrics() {
   const { id } = useParams();
   const [lbData, setLbData] = useState(null);
-  const [hourlyData, setHourlyData] = useState(null);
+  const [hourlyData, setHourlyData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // --- Fetch main LB metrics ---
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        const res = await axiosInstance.get(`${apiurl}/lbs/${id}/metrics`);
-        setLbData(res.data);
+        const [metricsRes, hourlyRes] = await Promise.all([
+          axiosInstance.get(`${apiurl}/lbs/${id}/metrics`),
+          axiosInstance.get(`${apiurl}/lbs/${id}/hourlyreq`)
+        ]);
+
+        setLbData(metricsRes.data);
+
+        // Transform hourly data to array of objects: [{ hour: 0, instance1: 10, instance2: 5 }, ...]
+        const hours = Array.from({ length: 24 }, (_, i) => i);
+        const hourlyObj = hours.map(h => {
+          const obj = { hour: h };
+          hourlyRes.data.instances.forEach(inst => {
+            obj[inst.id] = inst.hourlyRequests[h] || 0;
+          });
+          return obj;
+        });
+        setHourlyData(hourlyObj);
+
       } catch (err) {
         console.error(err);
-        setError(err.response?.data?.error || err.message || "Error loading metrics");
+        const msg = err.response?.data?.error || err.message || "Error loading metrics";
+        setError(msg);
       } finally {
         setLoading(false);
       }
@@ -38,27 +55,12 @@ export default function LoadBalancerMetrics() {
     return () => clearInterval(interval);
   }, [id]);
 
-  // --- Fetch hourly requests per instance ---
-  useEffect(() => {
-    const fetchHourly = async () => {
-      try {
-        const res = await axiosInstance.get(`${apiurl}/lbs/${id}/hourlyreq`);
-        setHourlyData(res.data.instances);
-      } catch (err) {
-        console.error("Hourly requests fetch error:", err);
-      }
-    };
-
-    fetchHourly();
-    const interval = setInterval(fetchHourly, 30000);
-    return () => clearInterval(interval);
-  }, [id]);
-
   const getStatusColor = (status) => {
     switch (status) {
-      case "active": return "bg-success text-success-foreground";
-      case "inactive": return "bg-muted text-muted-foreground";
-      case "warning": return "bg-warning text-warning-foreground";
+      case "healthy": return "bg-success text-success-foreground";
+      case "degraded": return "bg-warning text-warning-foreground";
+      case "slow": return "bg-destructive text-destructive-foreground";
+      case "down": return "bg-muted text-muted-foreground";
       default: return "bg-muted text-muted-foreground";
     }
   };
@@ -75,29 +77,25 @@ export default function LoadBalancerMetrics() {
     return "text-destructive";
   };
 
-  if (loading) {
-    return (
-      <Layout>
-        <div className="flex items-center justify-center h-screen">
-          <p className="text-lg text-text-secondary">Loading metrics...</p>
-        </div>
-      </Layout>
-    );
-  }
+  if (loading) return (
+    <Layout>
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-lg text-text-secondary">Loading metrics...</p>
+      </div>
+    </Layout>
+  );
 
-  if (error || !lbData) {
-    return (
-      <Layout>
-        <div className="text-center py-12">
-          <h1 className="text-2xl font-bold text-destructive">Failed to Load Metrics</h1>
-          <p className="text-text-secondary mt-2">{error}</p>
-          <Button asChild className="mt-4">
-            <Link to="/dashboard">Back to Dashboard</Link>
-          </Button>
-        </div>
-      </Layout>
-    );
-  }
+  if (error || !lbData) return (
+    <Layout>
+      <div className="text-center py-12">
+        <h1 className="text-2xl font-bold text-destructive">Failed to Load Metrics</h1>
+        <p className="text-text-secondary mt-2">{error}</p>
+        <Button asChild className="mt-4">
+          <Link to="/dashboard">Back to Dashboard</Link>
+        </Button>
+      </div>
+    </Layout>
+  );
 
   return (
     <Layout>
@@ -107,8 +105,7 @@ export default function LoadBalancerMetrics() {
           <div className="flex items-center space-x-4">
             <Button variant="ghost" size="sm" asChild>
               <Link to="/dashboard">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Dashboard
+                <ArrowLeft className="h-4 w-4 mr-2" /> Back to Dashboard
               </Link>
             </Button>
             <div>
@@ -132,9 +129,7 @@ export default function LoadBalancerMetrics() {
                   <p className="text-2xl font-bold text-foreground">{lbData.metrics.totalRequests?.toLocaleString()}</p>
                   <p className="text-xs text-text-secondary mt-1">Today: {lbData.metrics.requestsToday}</p>
                 </div>
-                <div className="bg-primary/10 p-2 rounded-full">
-                  <Globe className="h-5 w-5 text-primary" />
-                </div>
+                <div className="bg-primary/10 p-2 rounded-full"><Globe className="h-5 w-5 text-primary" /></div>
               </div>
             </CardContent>
           </Card>
@@ -150,9 +145,7 @@ export default function LoadBalancerMetrics() {
                   </p>
                   <p className="text-xs text-text-secondary mt-1">Peak RPM: {lbData.metrics.peakRPM}</p>
                 </div>
-                <div className="bg-secondary/10 p-2 rounded-full">
-                  <Clock className="h-5 w-5 text-secondary" />
-                </div>
+                <div className="bg-secondary/10 p-2 rounded-full"><Clock className="h-5 w-5 text-secondary" /></div>
               </div>
             </CardContent>
           </Card>
@@ -166,9 +159,7 @@ export default function LoadBalancerMetrics() {
                   <p className="text-2xl font-bold text-success">{lbData.metrics.successRate}%</p>
                   <p className="text-xs text-text-secondary mt-1">Error: {lbData.metrics.errorRate}%</p>
                 </div>
-                <div className="bg-success/10 p-2 rounded-full">
-                  <TrendingUp className="h-5 w-5 text-success" />
-                </div>
+                <div className="bg-success/10 p-2 rounded-full"><TrendingUp className="h-5 w-5 text-success" /></div>
               </div>
             </CardContent>
           </Card>
@@ -182,72 +173,41 @@ export default function LoadBalancerMetrics() {
                   <p className="text-2xl font-bold text-success">{lbData.metrics.uptime}%</p>
                   <p className="text-xs text-text-secondary mt-1">Bandwidth: {lbData.metrics.bandwidth}GB</p>
                 </div>
-                <div className="bg-success/10 p-2 rounded-full">
-                  <Activity className="h-5 w-5 text-success" />
-                </div>
+                <div className="bg-success/10 p-2 rounded-full"><Activity className="h-5 w-5 text-success" /></div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Hourly Request Graph */}
+        {/* Hourly Requests Line Chart */}
         <Card className="shadow-sm border-border">
           <CardHeader>
             <CardTitle className="text-xl font-semibold text-foreground flex items-center">
-              <BarChart3 className="h-5 w-5 mr-2" /> Hourly Request Volume
+              <BarChart3 className="h-5 w-5 mr-2" />Hourly Request Volume
             </CardTitle>
             <CardDescription className="text-text-secondary">
               Requests per server instance in the last 24 hours
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {hourlyData ? (
-              <div className="flex space-x-2 h-32">
-                {hourlyData.map((inst, idx) => {
-                  const maxReq = Math.max(...inst.hourlyRequests, 1);
-                  return (
-                    <div key={inst.id} className="flex-1 flex flex-col items-center">
-                      {inst.hourlyRequests.map((r, i) => (
-                        <div
-                          key={i}
-                          title={`${r} requests at ${i}:00 - ${inst.url}`}
-                          className="w-full mb-1 rounded-t-sm transition-all duration-300"
-                          style={{
-                            height: `${(r / maxReq) * 100}%`,
-                            backgroundColor: `hsl(${(idx / hourlyData.length) * 360}, 70%, 50%)`,
-                          }}
-                        ></div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-sm text-text-secondary">Loading hourly requests...</p>
-            )}
-
-            {/* Legend */}
-            {hourlyData && (
-              <div className="flex flex-wrap mt-2 gap-4">
-                {hourlyData.map((inst, idx) => (
-                  <div key={inst.id} className="flex items-center space-x-1 text-xs">
-                    <span
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: `hsl(${(idx / hourlyData.length) * 360}, 70%, 50%)` }}
-                    ></span>
-                    <span>{inst.url}</span>
-                  </div>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={hourlyData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="hour" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                {lbData.instances.map((inst, idx) => (
+                  <Line
+                    key={inst.id}
+                    type="monotone"
+                    dataKey={inst.id}
+                    stroke={`hsl(${(idx * 70) % 360}, 70%, 50%)`}
+                    activeDot={{ r: 6 }}
+                  />
                 ))}
-              </div>
-            )}
-
-            <div className="flex justify-between text-xs text-text-secondary mt-2">
-              <span>00:00</span>
-              <span>06:00</span>
-              <span>12:00</span>
-              <span>18:00</span>
-              <span>23:59</span>
-            </div>
+              </LineChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
 
@@ -270,11 +230,11 @@ export default function LoadBalancerMetrics() {
                   <div key={instance.id} className="p-4 bg-muted/30 rounded-lg border border-border">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center space-x-3">
-                        <div className="bg-primary/10 p-2 rounded-lg">
-                          <Server className="h-4 w-4 text-primary" />
-                        </div>
+                        <div className="bg-primary/10 p-2 rounded-lg"><Server className="h-4 w-4 text-primary" /></div>
                         <div>
                           <h4 className="font-medium text-foreground">{instance.url}</h4>
+                            <h4 className="font-medium text-foreground">{instance.servername}</h4>
+
                           <p className="text-sm text-text-secondary">Instance ID: {instance.id}</p>
                         </div>
                       </div>
@@ -288,42 +248,27 @@ export default function LoadBalancerMetrics() {
                       <div className="space-y-2">
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-text-secondary">Requests Handled</span>
-                          <span className="text-sm font-medium text-foreground">
-                            {instance.metrics.requests.toLocaleString()}
-                          </span>
+                          <span className="text-sm font-medium text-foreground">{instance.metrics.requests.toLocaleString()}</span>
                         </div>
-                        <Progress
-                          value={(instance.metrics.requests / Math.max(...lbData.instances.map(i => i.metrics.requests))) * 100}
-                          className="h-2"
-                        />
+                        <Progress value={(instance.metrics.requests / Math.max(...lbData.instances.map(i => i.metrics.requests))) * 100} className="h-2" />
                       </div>
 
                       {/* Latency */}
                       <div className="space-y-2">
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-text-secondary">Last Response Time</span>
-                          <span className={`text-sm font-medium ${getLatencyColor(instance.metrics.lastLatency)}`}>
-                            {instance.metrics.lastLatency}ms
-                          </span>
+                          <span className={`text-sm font-medium ${getLatencyColor(instance.metrics.lastLatency)}`}>{instance.metrics.lastLatency}ms</span>
                         </div>
-                        <Progress
-                          value={Math.min((instance.metrics.lastLatency / 300) * 100, 100)}
-                          className="h-2"
-                        />
+                        <Progress value={Math.min((instance.metrics.lastLatency / 300) * 100, 100)} className="h-2" />
                       </div>
 
                       {/* Error Rate */}
                       <div className="space-y-2">
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-text-secondary">Error Rate</span>
-                          <span className={`text-sm font-medium ${getErrorRateColor(errorRate)}`}>
-                            {errorRate.toFixed(1)}%
-                          </span>
+                          <span className={`text-sm font-medium ${getErrorRateColor(errorRate)}`}>{errorRate.toFixed(1)}%</span>
                         </div>
-                        <Progress
-                          value={Math.min(errorRate, 100)}
-                          className="h-2"
-                        />
+                        <Progress value={Math.min(errorRate, 100)} className="h-2" />
                       </div>
                     </div>
                   </div>

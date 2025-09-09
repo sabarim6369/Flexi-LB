@@ -10,11 +10,12 @@ export default function Settings() {
   return (
     <div className="flex h-screen">
       {/* Sidebar */}
-      <Sidebar />
+        <div className="w-64 h-screen sticky top-0">
+        <Sidebar />
+      </div>
 
-      {/* Main Content */}
-      {/* ml-64 only applies on desktop (md:ml-64), on mobile it's full width */}
-      <div className="flex-1 md:ml-2 p-6 space-y-6 transition-all duration-300">
+      {/* Main Content - scrollable */}
+      <div className="flex-1 p-6 space-y-6 overflow-y-auto h-screen">
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-foreground">Settings</h1>

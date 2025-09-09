@@ -3,10 +3,12 @@ import User from "../Models/User.js";
 
 
 export const authMiddleware = async (c, next) => {
+  console.log("🤣🤣🤣🤣🤣")
   try {
     const authHeader = c.req.header("Authorization"); 
     
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.log("😎😎😎😎")
       return c.json({ error: "Unauthorized" }, 401);
     }
 
