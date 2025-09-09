@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState,useEffect} from "react";
 import { Plus, Server, Activity, AlertCircle, Eye, Edit, Trash2, Globe } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { CreateLBModal } from "@/components/modals/CreateLBModal";
 import { Sidebar } from "@/components/Sidebar";
+import { toast } from "sonner"
+import { apiurl } from './../api';
+import axiosInstance from './../Utils/axiosInstance';
 
 const mockLoadBalancers = [
   {
@@ -58,19 +61,85 @@ export default function Dashboard() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [loadBalancers, setLoadBalancers] = useState(mockLoadBalancers);
 
-  const handleCreateLB = (newLB) => {
-    const lb = {
-      id: Date.now(),
-      ...newLB,
-      status: "active",
-      instances: newLB.servers.length,
-      activeInstances: newLB.servers.length,
-      totalRequests: 0,
-      avgLatency: 0,
-      lastUpdated: "Just now"
-    };
-    setLoadBalancers(prev => [...prev, lb]);
+  // const handleCreateLB =async (newLB) => {
+  //   const lb = {
+  //     id: Date.now(),
+  //     ...newLB,
+  //     status: "active",
+  //     instances: newLB.servers.length,
+  //     activeInstances: newLB.servers.length,
+  //     totalRequests: 0,
+  //     avgLatency: 0,
+  //     lastUpdated: "Just now"
+  //   };
+  //   const res=await axios.post(`${apiurl}/lbs`);
+  //   setLoadBalancers(prev => [...prev, lb]);
+  // };
+ useEffect(() => {
+  const getlbs = async () => {
+    try {
+      const res = await axiosInstance.get(`${apiurl}/lbs`);
+      console.log(res);
+      if (res.data && Array.isArray(res.data)) {
+        const apiLBs = res.data.map((lb) => ({
+          id: lb._id, 
+          name: lb.name,
+          endpoint: lb.endpoint,
+          status: "active", 
+          instances: lb.instances.length,
+          activeInstances: lb.instances.filter(i => i.isHealthy).length,
+          totalRequests: lb.instances.reduce((sum, i) => sum + (i.metrics?.requests || 0), 0),
+          avgLatency: lb.instances.length > 0 
+            ? Math.round(
+                lb.instances.reduce((sum, i) => sum + (i.metrics?.totalLatencyMs || 0), 0) / lb.instances.length
+              )
+            : 0,
+          lastUpdated: new Date(lb.updatedAt).toLocaleString(),
+        }));
+
+
+        setLoadBalancers([...mockLoadBalancers, ...apiLBs]);
+      }
+    } catch (error) {
+      console.error("Error fetching LBs:", error);
+      toast.error("Failed to load Load Balancers ❌");
+      // Keep only mock if API fails
+      setLoadBalancers(mockLoadBalancers);
+    }
   };
+
+  getlbs();
+}, []);
+
+  const handleCreateLB = async (newLB) => {
+  const lb = {
+    id: Date.now(),
+    ...newLB,
+    status: "active",
+    instances: newLB.instances.length,
+    activeInstances: newLB.instances.length,
+    totalRequests: 0,
+    avgLatency: 0,
+    lastUpdated: "Just now"
+  };
+
+  try {
+    const res = await axiosInstance.post(`${apiurl}/lbs`, {
+      name: newLB.name,
+      instances: newLB.instances,
+      algorithm: newLB.algorithm,
+    });
+
+    if (res.data) {
+      toast.success("Load Balancer created successfully 🎉");
+      setLoadBalancers(prev => [...prev, lb]);
+    }
+  } catch (error) {
+    console.error("Error creating LB:", error);
+    toast.error("Failed to create Load Balancer ❌");
+  }
+};
+
 
   const getStatusBadge = (status) => {
     const variants = {
