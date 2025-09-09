@@ -9,7 +9,9 @@ import {
   updateInstance,
   removeInstance,
   proxyRequest,
-  getMetrics
+  getMetrics,
+  getLBMetrics,
+  getLBHourlyRequests
 } from "../Controllers/lbController.js";
 import { authMiddleware } from "../Middleware/authMiddleware.js";
 
@@ -22,16 +24,16 @@ router.get("/:lbId", authMiddleware, getLB);
 router.put("/:lbId", authMiddleware, updateLB);
 router.delete("/:lbId", authMiddleware, deleteLB);
 
-// Instance routes
 router.post("/:lbId/instances", authMiddleware, addInstance);
 router.put("/:lbId/instances", authMiddleware, updateInstance);
 router.delete("/:lbId/instances", authMiddleware, removeInstance);
 
 // Metrics
-router.get("/:lbId/metrics", authMiddleware, getMetrics);
+router.get("/:id/metrics", authMiddleware, getLBMetrics);
+router.get("/:id/hourlyreq",authMiddleware,getLBHourlyRequests)
 
 // Public proxy endpoint
-router.all("/proxy/:slug/*", proxyRequest);
-router.all("/proxy/:slug", proxyRequest);
+// router.all("/proxy/:slug/*", proxyRequest);
+// router.all("/proxy/:slug", proxyRequest);
 
 export default router;

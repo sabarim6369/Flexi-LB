@@ -35,6 +35,9 @@ const handleSubmit = async (e) => {
         email: formData.email,
         password: formData.password,
       });
+ if (response.data.token) {
+          localStorage.setItem("token", response.data.token);
+        }
 
       console.log("Signup success:", response.data);
             toast.success("Signup successful 🎉")

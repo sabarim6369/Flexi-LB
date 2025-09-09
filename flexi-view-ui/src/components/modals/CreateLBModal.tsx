@@ -16,14 +16,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export function CreateLBModal({ isOpen, onClose, onSubmit }) {
   const [formData, setFormData] = useState({
     name: "",
-    instances: [""],
+    instances: [{ url: "", weight: 1 }],
     algorithm: "round_robin",
   });
 
   const addInstance = () => {
     setFormData((prev) => ({
       ...prev,
-      instances: [...prev.instances, ""],
+      instances: [...prev.instances, { url: "", weight: 1 }],
     }));
   };
 
@@ -34,21 +34,23 @@ export function CreateLBModal({ isOpen, onClose, onSubmit }) {
     }));
   };
 
-  const updateInstance = (index, value) => {
+  const updateInstance = (index, field, value) => {
     setFormData((prev) => ({
       ...prev,
-      instances: prev.instances.map((inst, i) => (i === index ? value : inst)),
+      instances: prev.instances.map((inst, i) =>
+        i === index ? { ...inst, [field]: value } : inst
+      ),
     }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    onSubmit(formData); // send to backend
     onClose();
     // Reset form
     setFormData({
       name: "",
-      instances: [""],
+      instances: [{ url: "", weight: 1 }],
       algorithm: "round_robin",
     });
   };
@@ -130,12 +132,30 @@ export function CreateLBModal({ isOpen, onClose, onSubmit }) {
                     <div className="bg-primary/10 p-2 rounded">
                       <Server className="h-4 w-4 text-primary" />
                     </div>
+
+                    {/* URL Input */}
                     <Input
                       placeholder="http://localhost:5001"
-                      value={instance}
-                      onChange={(e) => updateInstance(index, e.target.value)}
+                      value={instance.url}
+                      onChange={(e) =>
+                        updateInstance(index, "url", e.target.value)
+                      }
                       required
                     />
+
+                    {/* Weight Input */}
+                    <Input
+                      type="number"
+                      min="1"
+                      className="w-20"
+                      placeholder="Weight"
+                      value={instance.weight}
+                      onChange={(e) =>
+                        updateInstance(index, "weight", Number(e.target.value))
+                      }
+                      required
+                    />
+
                     {formData.instances.length > 1 && (
                       <Button
                         type="button"
