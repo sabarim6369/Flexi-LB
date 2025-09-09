@@ -33,9 +33,9 @@ This makes it accessible for both developers and teams who prefer a **visual, us
 ## Tech Stack 🛠
 
 - **Frontend (UI):** React + Vite (flexi-view-ui)  
-- **Backend API:** Node.js, Express  
+- **Backend API:** Bun + Hono  
 - **Database:** MongoDB (server configs, user data, alerts)  
-- **Message Queue:** RabbitMQ (notifications)  
+- **Message Queue:** RabbitMQ (hosted on CloudAMQP)  
 - **Deployment:** Vercel (UI) + Render/other (backend)  
 
 ## Getting Started 🚀
@@ -93,4 +93,5 @@ PORT=4000
 ## License 📄
 
 ## This project is licensed under the MIT License.
+
 
