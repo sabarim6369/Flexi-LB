@@ -101,11 +101,14 @@ export default function LoadBalancerDetail() {
 
   const handleUpdateServer = async (serverId: string) => {
     try {
-      const res = await axiosInstance.put(`${apiurl}/lbs/${lbData.id}/instances`, {
-        id: serverId,
-        url: editingServerData.url,
-        weight: editingServerData.weight
-      });
+      const res = await axiosInstance.put(
+        `${apiurl}/lbs/${lbData.id}/instances`,
+        {
+          id: serverId,
+          url: editingServerData.url,
+          weight: editingServerData.weight,
+        }
+      );
       if (res.data.lb) {
         setLbData(res.data.lb);
         updateLoadBalancer(lbData.id, res.data.lb);
@@ -192,7 +195,7 @@ export default function LoadBalancerDetail() {
         className="w-full mt-1 p-2 border border-border rounded bg-input"
       >
         <option value="round-robin">Round Robin</option>
-        <option value="least-connections">Least Connections</option>
+        <option value="least_conn">Least Connections</option>
         <option value="ip-hash">IP Hash</option>
       </select>
     </div>

@@ -30,7 +30,7 @@ router.delete("/:lbId/instances", authMiddleware, removeInstance);
 router.get("/:lbId/metrics", authMiddleware, getMetrics);
 
 // Public proxy endpoint
-router.all("/proxy/:slug/*", proxyRequest);
-router.all("/proxy/:slug", proxyRequest);
+// router.all("/proxy/:slug/*", proxyRequest);
+// router.all("/proxy/:slug", proxyRequest);
 
 export default router;

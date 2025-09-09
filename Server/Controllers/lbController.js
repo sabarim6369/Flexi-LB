@@ -1,6 +1,6 @@
 import LoadBalancer from "../Models/LoadBalancer.js";
 import slugify from "slugify";
-
+import axios from 'axios'
 const rrState = new Map();
 
 function selectInstance(lb) {
@@ -83,11 +83,40 @@ export async function createLB(c) {
 
 
 export async function listLBs(c) {
+  try {
     const user = c.get("user");
-    console.log(user);
-  const lbs = await LoadBalancer.find({ owner: user.id });
+    const lbs = await LoadBalancer.find({ owner: user.id });
 
-return c.json(lbs);
+    // --- Aggregations ---
+    const activeLBs = lbs.length;
+
+    let totalInstances = 0;
+    let totalRequests = 0;
+    let totalLatency = 0;
+
+    lbs.forEach(lb => {
+      totalInstances += lb.instances.length;
+      lb.instances.forEach(inst => {
+        totalRequests += inst.metrics.requests;
+        totalLatency += inst.metrics.totalLatencyMs;
+      });
+    });
+
+    const avgLatency =
+      totalRequests > 0 ? Math.round(totalLatency / totalRequests) : 0;
+
+    return c.json({
+      lbs,
+      stats: {
+        activeLBs,
+        totalInstances,
+        totalRequests,
+        avgLatency,
+      },
+    });
+  } catch (err) {
+    return c.json({ error: err.message }, 500);
+  }
 }
 
 export async function getLB(c) {
@@ -179,46 +208,90 @@ export async function removeInstance(c) {
 }
 
 
-export async function proxyRequest(c) {
-  try {
-    const slug = c.req.param("slug");
-    const lb = await LoadBalancer.findOne({ slug });
-    if (!lb) return c.text("LB not found", 404);
+// keep round-robin counters in memory per LB
+const rrCounters = {};
 
-    const target = selectInstance(lb);
-    if (!target) return c.text("No healthy instances", 502);
+function pickInstance(lb, clientIp) {
+  // ✅ only consider healthy instances
+  const healthyInstances = lb.instances.filter(i => i.isHealthy);
+  if (healthyInstances.length === 0) return null;
 
-    const tail = c.req.param("0") || "";
-    const url = target.url.replace(/\/$/, "") + "/" + tail.replace(/^\//, "");
-
-    const start = Date.now();
-    const headers = {};
-    for (const [k, v] of c.req.headers.entries()) headers[k] = v;
-    const body = await c.req.arrayBuffer().catch(() => null);
-
-    const res = await fetch(url, {
-      method: c.req.method,
-      headers,
-      body: body && body.byteLength ? Buffer.from(body) : undefined,
-    });
-
-    const latency = Date.now() - start;
-    const inst = lb.instances.find(i => i.id === target.id);
-    if (inst) {
-      inst.metrics.requests += 1;
-      inst.metrics.totalLatencyMs += latency;
-      if (!res.ok) inst.metrics.failures += 1;
-      await lb.save();
+  switch (lb.algorithm) {
+    case "roundRobin": {
+      if (!rrCounters[lb.id]) rrCounters[lb.id] = 0;
+      const idx = rrCounters[lb.id] % healthyInstances.length;
+      rrCounters[lb.id]++;
+      return healthyInstances[idx];
     }
 
-    const resBody = await res.arrayBuffer();
-    const response = c.body(resBody, res.status);
-    for (const [k, v] of res.headers.entries()) response.header(k, v);
-    return response;
-  } catch (err) {
-    return c.text("Proxy error: " + err.message, 500);
+    case "leastConn": {
+      return healthyInstances.reduce((a, b) =>
+        (a.activeConnections || 0) <= (b.activeConnections || 0) ? a : b
+      );
+    }
+
+    case "ipHash": {
+      const hash = [...clientIp].reduce((acc, c) => acc + c.charCodeAt(0), 0);
+      return healthyInstances[hash % healthyInstances.length];
+    }
+
+    default:
+      return healthyInstances[0]; // fallback
   }
 }
+
+export async function proxyRequest(c) {
+  const slug = c.req.param("slug");
+  const path = c.req.param("*") || "";
+
+  const lb = await LoadBalancer.findOne({ slug });
+  if (!lb || lb.instances.length === 0) {
+    return c.json({ error: "No backend available" }, 404);
+  }
+
+  const clientIp =
+    c.req.header("x-forwarded-for") ||
+    c.req.header("x-real-ip") ||
+    "127.0.0.1";
+
+  // pick instance using algorithm
+const instance = pickInstance(lb, clientIp);
+if (!instance) {
+  return c.json({ error: "No healthy instances available" }, 503);
+}
+
+
+  try {
+    const targetUrl = `${instance.url}/${path}`;
+    const method = c.req.method;
+
+    const response = await axios({
+      url: targetUrl,
+      method,
+      data: method !== "GET" ? await c.req.json().catch(() => null) : undefined,
+      headers: c.req.header(),
+      validateStatus: () => true,
+    });
+
+    return c.newResponse(
+      typeof response.data === "object"
+        ? JSON.stringify(response.data)
+        : response.data,
+      response.status,
+      {
+        ...response.headers,
+        "content-type":
+          typeof response.data === "object"
+            ? "application/json"
+            : response.headers["content-type"] || "text/plain",
+      }
+    );
+  } catch (err) {
+    console.error("Proxy error", err.message);
+    return c.json({ error: "Proxy request failed" }, 500);
+  }
+}
+
 
 
 export async function getMetrics(c) {
