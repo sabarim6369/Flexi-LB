@@ -73,9 +73,11 @@ export async function createLB(c) {
 
 
 export async function listLBs(c) {
-  const user = c.req.user;
-  const lbs = await LoadBalancer.find({ owner: user._id }).lean();
-  return c.json({ lbs });
+    const user = c.get("user");
+    console.log(user);
+  const lbs = await LoadBalancer.find({ owner: user.id });
+
+return c.json(lbs);
 }
 
 export async function getLB(c) {

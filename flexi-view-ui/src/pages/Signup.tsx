@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-
+import { apiurl } from './../api';
+import { toast } from "sonner"
+import axios from 'axios'
 export default function Signup() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -17,13 +19,38 @@ export default function Signup() {
   });
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    // Simple validation - in real app would create account
-    if (formData.name && formData.email && formData.password && formData.password === formData.confirmPassword) {
+ 
+const handleSubmit = async (e) => {
+  e.preventDefault();
+
+  if (
+    formData.name &&
+    formData.email &&
+    formData.password &&
+    formData.password === formData.confirmPassword
+  ) {
+    try {
+      const response = await axios.post(`${apiurl}/auth/signup`, {
+        username: formData.name,
+        email: formData.email,
+        password: formData.password,
+      });
+
+      console.log("Signup success:", response.data);
+            toast.success("Signup successful 🎉")
       navigate("/dashboard");
+    } catch (error) {
+            toast.error(error.response?.data?.message || "Signup failed ❌")
+
+      console.error(
+        "Signup failed:",
+        error.response?.data || error.message
+      );
     }
-  };
+  } else {
+    console.warn("Validation failed: Check your input fields");
+  }
+};
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));

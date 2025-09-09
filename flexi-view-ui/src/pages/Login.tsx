@@ -5,20 +5,41 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-
+import { toast } from "sonner"
+import axios from 'axios'
+import { apiurl } from './../api';
 export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    // Simple validation - in real app would authenticate
-    if (email && password) {
-      navigate("/dashboard");
+const handleSubmit = async (e) => {
+  e.preventDefault();
+
+  if (email && password) {
+    try {
+      const res = await axios.post(`${apiurl}/auth/login`, {
+        email,
+        password,
+      });
+
+      if (res.data) {
+        if (res.data.token) {
+          localStorage.setItem("token", res.data.token);
+        }
+
+        toast.success("Login successful 🎉");
+        navigate("/dashboard");
+      }
+    } catch (error) {
+      console.error("Login failed:", error);
+      toast.error("Invalid credentials or server error ❌");
     }
-  };
+  } else {
+    toast.warning("Please enter email and password ⚠️");
+  }
+};
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">

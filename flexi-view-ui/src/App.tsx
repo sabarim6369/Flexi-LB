@@ -13,6 +13,7 @@ import LoadBalancerMetrics from "./pages/LoadBalancerMetrics";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
+
 const queryClient = new QueryClient();
 
 const App = () => (
