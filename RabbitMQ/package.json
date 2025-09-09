@@ -1,0 +1,13 @@
+{
+  "name": "rabbitmq",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "nodemailer": "^7.0.6"
+  }
+}

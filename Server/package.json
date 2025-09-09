@@ -10,7 +10,9 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "amqplib": "^0.10.9",
     "bcryptjs": "^3.0.2",
+    "dotenv": "^17.2.2",
     "hono": "^4.9.6",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.1",
