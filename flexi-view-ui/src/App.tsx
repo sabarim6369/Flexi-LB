@@ -12,7 +12,8 @@ import LoadBalancerDetail from "./pages/LoadBalancerDetail";
 import LoadBalancerMetrics from "./pages/LoadBalancerMetrics";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
-
+import ProtectedRoute from "./Utils/Protectedroute";
+import AuthRoute from "./Utils/AuthRoute";
 
 const queryClient = new QueryClient();
 
@@ -23,16 +24,22 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
+          {/* Public route */}
           <Route path="/" element={<Index />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/metrics" element={<Metrics />} />
-          <Route path="/lb/:id" element={<LoadBalancerDetail />} />
-          <Route path="/lb/:id/edit" element={<LoadBalancerDetail />} />
-          <Route path="/lb/:id/metrics" element={<LoadBalancerMetrics />} />
-          <Route path="/settings" element={<Settings />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+
+          {/* Login/Signup */}
+          <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
+          <Route path="/signup" element={<AuthRoute><Signup /></AuthRoute>} />
+
+          {/* Protected routes */}
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/metrics" element={<ProtectedRoute><Metrics /></ProtectedRoute>} />
+          <Route path="/lb/:id" element={<ProtectedRoute><LoadBalancerDetail /></ProtectedRoute>} />
+          <Route path="/lb/:id/edit" element={<ProtectedRoute><LoadBalancerDetail /></ProtectedRoute>} />
+          <Route path="/lb/:id/metrics" element={<ProtectedRoute><LoadBalancerMetrics /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+
+          {/* Catch-all */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

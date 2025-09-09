@@ -3,7 +3,9 @@ import { signup, login, getUserById,
   editProfile,
   changePassword,
   updateNotifications,
-  getNotifications } from "../Controllers/authController.js";
+  getNotifications,
+  checkvalidity
+  } from "../Controllers/authController.js";
 import { authMiddleware } from "../Middleware/authMiddleware.js";
 
 const router = new Hono();
@@ -21,7 +23,7 @@ router.put("/user/password",authMiddleware, changePassword);
 // Update notification preferences
 router.put("/user/notifications",authMiddleware, updateNotifications);
 
-// Get notification preferences
 router.get("/user/notifications",authMiddleware, getNotifications);
+router.post("/user/check-validity",checkvalidity)
 export default router;
 
