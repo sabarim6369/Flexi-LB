@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Sidebar } from "@/components/Sidebar";
-import axiosInstance from "@/utils/axiosInstance"; 
+import axiosInstance from './../Utils/axiosInstance';
 import { apiurl } from './../api';
 import { toast } from "sonner";
 
