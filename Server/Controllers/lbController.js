@@ -40,6 +40,7 @@ function selectInstance(lb) {
 
 
 export async function createLB(c) {
+  console.log(c.req.json())
   try {
     const user = c.get("user");
     const { name, instances = [], algorithm = "round_robin" } = await c.req.json();
@@ -47,7 +48,10 @@ export async function createLB(c) {
     if (!name || instances.length === 0) {
       return c.json({ error: "Invalid body" }, 400);
     }
-
+  const existingLB = await LoadBalancer.findOne({ name, owner: user.id });
+    if (existingLB) {
+      return c.json({ error: "Load Balancer name already exists" }, 400);
+    }
     const baseSlug = slugify(name, { lower: true, strict: true });
     let slug = baseSlug;
     let counter = 1;
@@ -63,7 +67,8 @@ export async function createLB(c) {
        instances: instances.map((inst, i) => ({
     id: `inst-${Date.now()}-${i}`,
     url: inst.url,
-    weight: inst.weight ?? 1,   
+    weight: inst.weight ?? 1, 
+    instancename:inst.name  
   })),
       endpoint: "temp"
     });
@@ -124,18 +129,29 @@ export async function getLB(c) {
   if (!lb) return c.json({ error: "LB not found" }, 404);
   return c.json({ lb });
 }
-
 export async function updateLB(c) {
   try {
+    const user = c.get("user"); // get the current user
     const { name, endpoint, algorithm } = await c.req.json();
     const lb = await LoadBalancer.findById(c.req.param("lbId"));
     if (!lb) return c.json({ error: "LB not found" }, 404);
-    if (name) lb.name = name;
+
+    // Check if the new name already exists for the same user
+    if (name && name !== lb.name) {
+      const existingLB = await LoadBalancer.findOne({ name, owner: user.id });
+      if (existingLB) {
+        return c.json({ error: "You already have a Load Balancer with this name" }, 400);
+      }
+      lb.name = name;
+    }
+
     if (endpoint) lb.endpoint = endpoint;
     if (algorithm) lb.algorithm = algorithm;
+
     await lb.save();
     return c.json({ lb });
   } catch (err) {
+    console.log(err)
     return c.json({ error: err.message }, 500);
   }
 }
@@ -153,33 +169,52 @@ export async function deleteLB(c) {
 
 export async function addInstance(c) {
   try {
-    const { url, weight = 1 } = await c.req.json();
+    const body = await c.req.json();
+    console.log("Body received:", body);
+
+    const { url, weight = 1, instancename = "s" } = body;
     const lb = await LoadBalancer.findById(c.req.param("lbId"));
     if (!lb) return c.json({ error: "LB not found" }, 404);
+
+    // Check if instancename already exists in this LB
+    if (lb.instances.some(inst => inst.instancename === instancename)) {
+      return c.json({ error: `Instance name "${instancename}" already exists in this LB.` }, 400);
+    }
 
     lb.instances.push({
       id: `inst-${Date.now()}`,
       url,
       weight,
+      instancename,
       isHealthy: true
     });
 
     await lb.save();
     return c.json({ lb });
   } catch (err) {
+    console.log(err);
     return c.json({ error: err.message }, 500);
   }
 }
 
 
+
 export async function updateInstance(c) {
   try {
-    const { id, url, weight } = await c.req.json();
+    const { id, url, weight, instancename } = await c.req.json();
     const lb = await LoadBalancer.findById(c.req.param("lbId"));
     if (!lb) return c.json({ error: "LB not found" }, 404);
 
     const instance = lb.instances.find(inst => inst.id === id);
     if (!instance) return c.json({ error: "Instance not found" }, 404);
+
+    // Check uniqueness if instancename is being updated
+    if (instancename && instancename !== instance.instancename) {
+      if (lb.instances.some(inst => inst.instancename === instancename)) {
+        return c.json({ error: `Instance name "${instancename}" already exists in this LB.` }, 400);
+      }
+      instance.instancename = instancename;
+    }
 
     if (url) instance.url = url;
     if (weight) instance.weight = weight;
@@ -190,6 +225,7 @@ export async function updateInstance(c) {
     return c.json({ error: err.message }, 500);
   }
 }
+
 
 
 export async function removeInstance(c) {
@@ -217,28 +253,53 @@ function pickInstance(lb, clientIp) {
   if (healthyInstances.length === 0) return null;
 
   switch (lb.algorithm) {
-    case "roundRobin": {
+    case "round-robin": {
       if (!rrCounters[lb.id]) rrCounters[lb.id] = 0;
       const idx = rrCounters[lb.id] % healthyInstances.length;
       rrCounters[lb.id]++;
       return healthyInstances[idx];
     }
 
-    case "leastConn": {
+    case "least_conn": {
       return healthyInstances.reduce((a, b) =>
         (a.activeConnections || 0) <= (b.activeConnections || 0) ? a : b
       );
     }
 
-    case "ipHash": {
+    case "random": {
+      const idx = Math.floor(Math.random() * healthyInstances.length);
+      return healthyInstances[idx];
+    }
+
+    case "ip-hash": {
       const hash = [...clientIp].reduce((acc, c) => acc + c.charCodeAt(0), 0);
       return healthyInstances[hash % healthyInstances.length];
+    }
+
+    case "weighted_round_robin": {
+      if (!rrCounters[lb.id]) rrCounters[lb.id] = 0;
+      const totalWeight = healthyInstances.reduce((sum, i) => sum + (i.weight || 1), 0);
+      let count = rrCounters[lb.id] % totalWeight;
+      rrCounters[lb.id]++;
+
+      for (const inst of healthyInstances) {
+        count -= inst.weight || 1;
+        if (count < 0) return inst;
+      }
+      return healthyInstances[0]; // fallback
+    }
+
+    case "least_response_time": {
+      return healthyInstances.reduce((a, b) =>
+        (a.metrics.lastLatency || 0) <= (b.metrics.lastLatency || 0) ? a : b
+      );
     }
 
     default:
       return healthyInstances[0]; // fallback
   }
 }
+
 export async function proxyRequest(c) {
   const slug = c.req.param("slug");
   const path = c.req.param("*") || "";
@@ -358,6 +419,7 @@ export const getLBMetrics = async (c) => {
       return {
         id: inst.id || inst._id,
         url: inst.url,
+        servername: inst.instancename || inst.url, // ✅ must exist
         healthStatus: inst.isHealthy
           ? inst.metrics.lastLatency < 200
             ? "healthy"
@@ -438,5 +500,86 @@ export const getLBHourlyRequests = async (c) => {
   } catch (err) {
     console.error(err);
     return c.json({ error: err.message }, 500);
+  }
+};
+
+export const getoverallMetrics = async (c) => {
+  try {
+
+       const user = c.get("user");
+       console.log("😁😁😁😁")
+
+    if (!user || !user.id) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    const lbs = await LoadBalancer.find({ owner: user.id }).lean();
+
+    let totalRequests = 0;
+    let totalLatency = 0;
+    let latencyCount = 0;
+    let totalFailures = 0;
+    let activeLBs = 0;
+    let totalLBs = lbs.length;
+    let totalInstances = 0;
+    let activeInstances = 0;
+
+    const loadBalancers = lbs.map((lb) => {
+      let requests = 0;
+      let failures = 0;
+      let latencySum = 0;
+      let lastLatency = 0;
+      let instanceCount = lb.instances.length;
+      let healthyInstances = 0;
+
+      lb.instances.forEach((inst) => {
+        requests += inst.metrics.requests || 0;
+        failures += inst.metrics.failures || 0;
+        latencySum += inst.metrics.totalLatencyMs || 0;
+        if (inst.metrics.lastLatency) lastLatency = inst.metrics.lastLatency;
+        if (inst.isHealthy) healthyInstances++;
+      });
+
+      const avgLatency = requests > 0 ? Math.round(latencySum / requests) : 0;
+      const errorRate = requests > 0 ? ((failures / requests) * 100).toFixed(1) : "0.0";
+      const uptime = ((healthyInstances / instanceCount) * 100).toFixed(1);
+
+      totalRequests += requests;
+      totalLatency += latencySum;
+      latencyCount += requests;
+      totalFailures += failures;
+      totalInstances += instanceCount;
+      activeInstances += healthyInstances;
+      if (healthyInstances > 0) activeLBs++;
+
+      let status = "active";
+      if (parseFloat(uptime) < 95) status = "warning";
+      if (healthyInstances === 0) status = "error";
+
+      return {
+        id: lb._id,
+        name: lb.name,
+        requests,
+        latency: avgLatency || lastLatency,
+        errorRate,
+        uptime,
+        status,
+        instances: { active: healthyInstances, total: instanceCount },
+      };
+    });
+
+    const overview = {
+      totalRequests,
+      totalLBs,
+      activeLBs,
+      avgLatency: latencyCount > 0 ? Math.round(totalLatency / latencyCount) : 0,
+      errorRate: totalRequests > 0 ? ((totalFailures / totalRequests) * 100).toFixed(1) : "0.0",
+      uptime: totalInstances > 0 ? ((activeInstances / totalInstances) * 100).toFixed(1) : "0.0",
+      instances: { active: activeInstances, total: totalInstances },
+    };
+
+    return c.json({ overview, loadBalancers });
+  } catch (err) {
+    console.error("Error fetching metrics:", err);
+    return c.json({ message: "Failed to fetch metrics" }, 500);
   }
 };

@@ -10,7 +10,7 @@ export function Sidebar() {
 
   const navItems = [
     { name: "Dashboard", icon: Activity, path: "/dashboard" },
-    { name: "Load Balancers", icon: Server, path: "/lbs" },
+    // { name: "Load Balancers", icon: Server, path: "/lbs" },
     { name: "Metrics", icon: Globe, path: "/metrics" },
     { name: "Alerts", icon: AlertCircle, path: "/alerts" },
     { name: "Settings", icon: Settings, path: "/settings" },

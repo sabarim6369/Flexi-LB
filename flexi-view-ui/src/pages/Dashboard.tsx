@@ -77,7 +77,7 @@ useEffect(() => {
 }, []);
 
 
- const handleCreateLB = async (newLB) => {
+const handleCreateLB = async (newLB) => {
   try {
     const res = await axiosInstance.post(`${apiurl}/lbs`, {
       name: newLB.name,
@@ -85,11 +85,11 @@ useEffect(() => {
       algorithm: newLB.algorithm,
     });
 
-    if (res.data) {
-      const createdLB = res.data.lb; // <-- make sure backend returns created LB object
+    if (res.data.lb) {
+      const createdLB = res.data.lb;
 
       const lb = {
-        id: createdLB._id,   // ✅ use MongoDB ID instead of Date.now()
+        id: createdLB._id,
         name: createdLB.name,
         endpoint: createdLB.endpoint,
         status: "active",
@@ -102,12 +102,18 @@ useEffect(() => {
 
       setLoadBalancers([...loadBalancers, lb]);
       toast.success("Load Balancer created successfully 🎉");
+
+      return true; // indicate success
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error creating LB:", error);
-    toast.error("Failed to create Load Balancer ❌");
+    toast.error(error.response?.data?.error || "Failed to create Load Balancer ❌");
+
+    return false; // indicate failure
   }
 };
+
+
 
 const deleteitem = async (lbId: string) => {
   try {
@@ -247,7 +253,7 @@ const deleteitem = async (lbId: string) => {
 
         {/* Load Balancers Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {loadBalancers.map((lb) => (
+{Array.isArray(loadBalancers) && loadBalancers.map((lb) => (
             <Card
               key={lb.id}
               className="shadow-sm border-border hover:shadow-md transition-all duration-300"
