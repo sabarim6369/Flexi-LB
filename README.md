@@ -86,10 +86,11 @@ PORT=4000
 
 ### Built with ❤️ by:
 
-### Sabari M – Maintainer
+### - **Sabari M** – Owner & Maintainer  
 
 ## Contributors are always welcome! Open a PR and join the project 🚀
 
 ## License 📄
 
 ## This project is licensed under the MIT License.
+
