@@ -7,7 +7,13 @@ app.get("/", (req, res) => {
   res.json({
     server: "Server 1",
     message: "Hello from Server 1 🚀",
+    
     time: new Date().toISOString(),
+    
+    
+  
+
+    
   });
 });
 
