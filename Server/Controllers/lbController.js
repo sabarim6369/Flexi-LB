@@ -73,7 +73,7 @@ export async function createLB(c) {
       endpoint: "temp"
     });
 
-    const BASE_URL = process.env.BASE_URL || "http://localhost:3003";
+    const BASE_URL = process.env.BASE_URL || "https://flexilb.onrender.com";
     lb.endpoint = `${BASE_URL}/proxy/${slug}`;
     await lb.save();
 
