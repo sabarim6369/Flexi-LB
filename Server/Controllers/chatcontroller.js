@@ -2,7 +2,6 @@ import Groq from "groq-sdk";
 
 const client = new Groq({
   apiKey: process.env.GROQ_API_KEY,
-//   apiKey: "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",
 });
 
 export async function  chat(c){
