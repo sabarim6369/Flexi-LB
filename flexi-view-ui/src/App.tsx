@@ -14,7 +14,7 @@ import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./Utils/Protectedroute";
 import AuthRoute from "./Utils/AuthRoute";
-
+import MainLayout from "./MainLayout";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -24,20 +24,18 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          {/* Public route */}
           <Route path="/" element={<Index />} />
-
-          {/* Login/Signup */}
           <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
           <Route path="/signup" element={<AuthRoute><Signup /></AuthRoute>} />
 
-          {/* Protected routes */}
-          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/metrics" element={<ProtectedRoute><Metrics /></ProtectedRoute>} />
-          <Route path="/lb/:id" element={<ProtectedRoute><LoadBalancerDetail /></ProtectedRoute>} />
-          <Route path="/lb/:id/edit" element={<ProtectedRoute><LoadBalancerDetail /></ProtectedRoute>} />
-          <Route path="/lb/:id/metrics" element={<ProtectedRoute><LoadBalancerMetrics /></ProtectedRoute>} />
-          <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route element={<MainLayout />}>
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/metrics" element={<ProtectedRoute><Metrics /></ProtectedRoute>} />
+            <Route path="/lb/:id" element={<ProtectedRoute><LoadBalancerDetail /></ProtectedRoute>} />
+            <Route path="/lb/:id/edit" element={<ProtectedRoute><LoadBalancerDetail /></ProtectedRoute>} />
+            <Route path="/lb/:id/metrics" element={<ProtectedRoute><LoadBalancerMetrics /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          </Route>
 
           {/* Catch-all */}
           <Route path="*" element={<NotFound />} />

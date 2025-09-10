@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { connectDB } from "./config/db.js";
 import authRoutes from "./Routes/auth.route.js";
 import lbRoutes from "./Routes/lb.route.js";
+import chatroute from "./Routes/chat.route.js";
 import { startHealthChecks } from "./Services/Healthcheckservice";
 import { proxyRequest} from "./Controllers/lbController.js"
 const app = new Hono();
@@ -25,6 +26,7 @@ app.use("*", async (c, next) => {
 require("./Services/EmailService.js")
 app.route("/auth", authRoutes);
 app.route("/lbs", lbRoutes);
+app.route("/api",chatroute);
 app.all("/proxy/:slug/*", proxyRequest);
 app.all("/proxy/:slug", proxyRequest);
 
