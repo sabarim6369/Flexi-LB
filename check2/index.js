@@ -9,9 +9,6 @@ app.get("/", (req, res) => {
     message: "Hello from Server 1 🚀",
     
     time: new Date().toISOString(),
-    
-    
-  
 
     
   });
