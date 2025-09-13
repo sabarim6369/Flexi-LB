@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
 import Metrics from "./pages/Metrics";
+import Alerts from "./pages/Alerts";
 import LoadBalancerDetail from "./pages/LoadBalancerDetail";
 import LoadBalancerMetrics from "./pages/LoadBalancerMetrics";
 import Settings from "./pages/Settings";
@@ -32,6 +33,7 @@ const App = () => (
           <Route element={<MainLayout />}>
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/metrics" element={<ProtectedRoute><Metrics /></ProtectedRoute>} />
+            <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
             <Route path="/lb/:id" element={<ProtectedRoute><LoadBalancerDetail /></ProtectedRoute>} />
             <Route path="/lb/:id/edit" element={<ProtectedRoute><LoadBalancerDetail /></ProtectedRoute>} />
             <Route path="/lb/:id/metrics" element={<ProtectedRoute><LoadBalancerMetrics /></ProtectedRoute>} />

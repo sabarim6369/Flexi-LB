@@ -20,6 +20,8 @@ import { Layout } from "@/components/ui/layout";
 import axiosInstance from "./../Utils/axiosInstance";
 import { Sidebar } from "@/components/Sidebar";
 import { apiurl } from "./../api";
+import Lottie from "lottie-react";
+import loadingAnimation from "@/Lottie/Loader.json";
 
 interface LoadBalancer {
   id: string;
@@ -92,11 +94,18 @@ export default function Metrics() {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="p-6 text-center text-muted-foreground">
-          Loading metrics...
+      <div className="flex">
+        <div className="w-64 h-screen sticky top-0">
+          <Sidebar />
         </div>
-      </Layout>
+        <div className="flex-1 flex justify-center items-center min-h-screen">
+          <Lottie 
+            animationData={loadingAnimation} 
+            loop={true}
+            style={{ width: 300, height: 300 }}
+          />
+        </div>
+      </div>
     );
   }
 
