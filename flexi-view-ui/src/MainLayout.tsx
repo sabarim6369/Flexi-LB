@@ -1,4 +1,4 @@
-// src/layouts/MainLayout.tsx
+
 import { Outlet } from "react-router-dom";
 import ChatBox from "./components/modals/ChatModel";
 export default function MainLayout() {

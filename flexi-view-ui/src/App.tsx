@@ -15,6 +15,7 @@ import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./Utils/Protectedroute";
 import AuthRoute from "./Utils/AuthRoute";
 import MainLayout from "./MainLayout";
+
 const queryClient = new QueryClient();
 
 const App = () => (
