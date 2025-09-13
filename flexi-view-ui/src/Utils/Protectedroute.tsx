@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import axios from "axios";
 import { apiurl } from './../api';
+import Lottie from "lottie-react";
+import loadingAnimation from "@/Lottie/Loader.json";
 
 interface Props {
   children: JSX.Element;
@@ -33,7 +35,15 @@ const ProtectedRoute = ({ children }: Props) => {
     checkToken();
   }, []);
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return (
+    <div className="flex justify-center items-center min-h-screen">
+      <Lottie 
+        animationData={loadingAnimation} 
+        loop={true}
+        style={{ width: 300, height: 300 }}
+      />
+    </div>
+  );
 
   if (!isValid) return <Navigate to="/login" replace />;
 
