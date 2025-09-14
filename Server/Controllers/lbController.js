@@ -316,6 +316,29 @@ export async function proxyRequest(c) {
     c.req.header("x-real-ip") ||
     "127.0.0.1";
 
+  if (lb.rateLimiterOn) {
+    const limit = lb.rateLimiter.limit;
+    const windowSec = lb.rateLimiter.window;
+
+    if (!lb._rateLimitStore) lb._rateLimitStore = new Map();
+    const now = Date.now();
+
+    const key = clientIp;
+    const record = lb._rateLimitStore.get(key) || { count: 0, start: now };
+    
+    if (now - record.start < windowSec * 1000) {
+      if (record.count >= limit) {
+        return c.json({ error: "Rate limit exceeded" }, 429);
+      } else {
+        record.count += 1;
+      }
+    } else {
+      record.count = 1;
+      record.start = now;
+    }
+    lb._rateLimitStore.set(key, record);
+  }
+
   const instance = pickInstance(lb, clientIp);
   if (!instance) {
     return c.json({ error: "No healthy instances available" }, 503);
@@ -324,13 +347,11 @@ export async function proxyRequest(c) {
   instance.metrics.requests = (instance.metrics.requests || 0) + 1;
   instance.metrics.todayRequests = (instance.metrics.todayRequests || 0) + 1;
 
- const now = new Date();
-const hourKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}-${String(now.getHours()).padStart(2,'0')}`;
-
+  const hourKey = `${new Date().toISOString().slice(0, 13)}`;
   const prevCount = instance.metrics.hourlyRequests?.get(hourKey) || 0;
   instance.metrics.hourlyRequests.set(hourKey, prevCount + 1);
 
-  await lb.save(); // Save updated metrics
+  await lb.save();
 
   try {
     const targetUrl = `${instance.url}/${path}`;
@@ -358,10 +379,9 @@ const hourKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')
       }
     );
   } catch (err) {
-    console.log(err);
     console.error("Proxy error", err.message);
     instance.metrics.failures = (instance.metrics.failures || 0) + 1;
-    await lb.save(); // Save failure count too
+    await lb.save();
     return c.json({ error: "Proxy request" }, 500);
   }
 }
