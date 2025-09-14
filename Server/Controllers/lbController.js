@@ -73,7 +73,9 @@ export async function createLB(c) {
       endpoint: "temp"
     });
 
-    const BASE_URL = process.env.BASE_URL || "https://flexilb.onrender.com";
+    // const BASE_URL = process.env.BASE_URL || "https://flexilb.onrender.com";
+        const BASE_URL = process.env.BASE_URL || "http://localhost:3003";
+
     lb.endpoint = `${BASE_URL}/proxy/${slug}`;
     await lb.save();
 
@@ -356,10 +358,11 @@ const hourKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')
       }
     );
   } catch (err) {
+    console.log(err);
     console.error("Proxy error", err.message);
     instance.metrics.failures = (instance.metrics.failures || 0) + 1;
     await lb.save(); // Save failure count too
-    return c.json({ error: "Proxy request failed" }, 500);
+    return c.json({ error: "Proxy request" }, 500);
   }
 }
 
