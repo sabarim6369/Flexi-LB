@@ -12,7 +12,12 @@ import {
   getMetrics,
   getLBMetrics,
   getLBHourlyRequests,
-  getoverallMetrics
+  getoverallMetrics,
+  setRateLimit,
+  getRateLimit,
+  updateRateLimit,
+  disableRateLimit,
+  listLBsForRateLimiterStatus
 } from "../Controllers/lbController.js";
 import { authMiddleware } from "../Middleware/authMiddleware.js";
 
@@ -34,5 +39,11 @@ router.get("data/overallmetrics",authMiddleware,getoverallMetrics);
 router.get("/:id/metrics", authMiddleware, getLBMetrics);
 router.get("/:id/hourlyreq",authMiddleware,getLBHourlyRequests)
 
+// Rate limiter routes
+router.post("/:id/ratelimit", authMiddleware, setRateLimit);
+router.get("/:id/ratelimit", authMiddleware, getRateLimit);
+router.put("/:id/ratelimit", authMiddleware, updateRateLimit);
+router.delete("/:id/ratelimit", authMiddleware, disableRateLimit);
+router.get("/ratelimiter/status",authMiddleware,listLBsForRateLimiterStatus);
 
 export default router;

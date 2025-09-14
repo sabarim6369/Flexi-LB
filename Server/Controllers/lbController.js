@@ -94,7 +94,7 @@ export async function listLBs(c) {
     const user = c.get("user");
     const lbs = await LoadBalancer.find({ owner: user.id });
 
-    // --- Aggregations ---
+    
     const activeLBs = lbs.length;
 
     let totalInstances = 0;
@@ -586,3 +586,167 @@ export const getoverallMetrics = async (c) => {
     return c.json({ message: "Failed to fetch metrics" }, 500);
   }
 };
+
+// Set rate limiter for a load balancer
+export async function setRateLimit(c) {
+  console.log("Setting rate limit")
+  try {
+    const user = c.get("user");
+    console.log(user)
+    const { id } = c.req.param();
+
+    const { limit, window } = await c.req.json();
+
+    if (!limit || !window || limit <= 0 || window <= 0) {
+      return c.json({ error: "Invalid limit or window values" }, 400);
+    }
+
+    const lb = await LoadBalancer.findOne({ _id: id, owner: user.id });
+    if (!lb) {
+      console.log("Load balancer not found")
+      console.log(id)
+      return c.json({ error: "Load balancer not found" }, 404);
+    }
+
+    lb.rateLimiter = { limit, window };
+    lb.rateLimiterOn = true;
+    await lb.save();
+
+    return c.json({ 
+      message: "Rate limit set successfully", 
+      rateLimit: lb.rateLimiter,
+      rateLimiterOn: lb.rateLimiterOn 
+    });
+  } catch (err) {
+    console.error("Error setting rate limit:", err);
+    return c.json({ message: "Failed to set rate limit" }, 500);
+  }
+}
+
+// Get rate limiter settings for a load balancer
+export async function getRateLimit(c) {
+  try {
+    const user = c.get("user");
+    const { id } = c.req.param();
+
+    const lb = await LoadBalancer.findOne({ _id: id, owner: user._id });
+    if (!lb) {
+      return c.json({ error: "Load balancer not found" }, 404);
+    }
+
+    return c.json({ 
+      rateLimit: lb.rateLimiter,
+      rateLimiterOn: lb.rateLimiterOn 
+    });
+  } catch (err) {
+    console.error("Error getting rate limit:", err);
+    return c.json({ message: "Failed to get rate limit" }, 500);
+  }
+}
+
+// Update rate limiter settings
+export async function updateRateLimit(c) {
+  try {
+    const user = c.get("user");
+    const { id } = c.req.param();
+    const { limit, window, rateLimiterOn } = await c.req.json();
+
+    const lb = await LoadBalancer.findOne({ _id: id, owner: user._id });
+    if (!lb) {
+      return c.json({ error: "Load balancer not found" }, 404);
+    }
+
+    if (limit !== undefined && window !== undefined) {
+      if (limit <= 0 || window <= 0) {
+        return c.json({ error: "Invalid limit or window values" }, 400);
+      }
+      lb.rateLimiter = { limit, window };
+    }
+
+    if (rateLimiterOn !== undefined) {
+      lb.rateLimiterOn = rateLimiterOn;
+    }
+
+    await lb.save();
+
+    return c.json({ 
+      message: "Rate limit updated successfully", 
+      rateLimit: lb.rateLimiter,
+      rateLimiterOn: lb.rateLimiterOn 
+    });
+  } catch (err) {
+    console.error("Error updating rate limit:", err);
+    return c.json({ message: "Failed to update rate limit" }, 500);
+  }
+}
+
+// Disable rate limiter for a load balancer
+export async function disableRateLimit(c) {
+  try {
+    const user = c.get("user");
+    const { id } = c.req.param();
+
+    const lb = await LoadBalancer.findOne({ _id: id, owner: user._id });
+    if (!lb) {
+      return c.json({ error: "Load balancer not found" }, 404);
+    }
+
+    lb.rateLimiterOn = false;
+    await lb.save();
+
+    return c.json({ 
+      message: "Rate limiter disabled successfully", 
+      rateLimiterOn: lb.rateLimiterOn 
+    });
+  } catch (err) {
+    console.error("Error disabling rate limit:", err);
+    return c.json({ message: "Failed to disable rate limit" }, 500);
+  }
+}
+export async function listLBsForRateLimiterStatus(c) {
+  try {
+    const user = c.get("user");
+    const lbs = await LoadBalancer.find({ owner: user.id });
+
+    const activeLBs = lbs.length;
+
+    let totalInstances = 0;
+    let totalRequests = 0;
+    let totalLatency = 0;
+    let totalRateLimiterOn = 0; // NEW: count of LBs with rate limiting enabled
+
+    // iterate over LBs
+    lbs.forEach(lb => {
+      totalInstances += lb.instances.length;
+      if (lb.rateLimiterOn) totalRateLimiterOn++; // NEW
+      lb.instances.forEach(inst => {
+        totalRequests += inst.metrics.requests;
+        totalLatency += inst.metrics.totalLatencyMs;
+      });
+    });
+
+    const avgLatency =
+      totalRequests > 0 ? Math.round(totalLatency / totalRequests) : 0;
+
+    // add rate limiter info per LB
+    const lbsWithRateLimiter = lbs.map(lb => ({
+      ...lb.toObject(),
+      rateLimiterOn: lb.rateLimiterOn,
+      rateLimiter: lb.rateLimiterOn ? lb.rateLimiter : null
+    }));
+
+    return c.json({
+      lbs: lbsWithRateLimiter,
+      stats: {
+        activeLBs,
+        totalInstances,
+        totalRequests,
+        avgLatency,
+        totalRateLimiterOn // NEW
+      },
+    });
+  } catch (err) {
+    return c.json({ error: err.message }, 500);
+  }
+}
+

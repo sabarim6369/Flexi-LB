@@ -14,6 +14,7 @@ export function Sidebar() {
     { name: "Metrics", icon: Globe, path: "/metrics" },
     { name: "Alerts", icon: AlertCircle, path: "/alerts" },
     { name: "Settings", icon: Settings, path: "/settings" },
+          { name: "Ratelimiter", icon: Server, path: "/ratelimiter" },
   ];
 
   useEffect(() => {

@@ -43,6 +43,11 @@ const LBSchema = new mongoose.Schema({
   },
   instances: { type: [InstanceSchema], default: [] },
   slug: { type: String, required: true, unique: true },
+    rateLimiterOn: { type: Boolean, default: false },
+  rateLimiter: {
+    limit: { type: Number, default: 100 },  
+    window: { type: Number, default: 60 }     
+  }
 }, { timestamps: true });
 
 

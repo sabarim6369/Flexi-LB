@@ -17,7 +17,6 @@ app.use("*", async (c, next) => {
     "GET, POST, PUT, DELETE, OPTIONS"
   );
 
-  // respond to preflight OPTIONS requests
   if (c.req.method === "OPTIONS") return c.text("", 204);
 
   await next();

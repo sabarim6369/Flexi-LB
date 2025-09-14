@@ -12,6 +12,7 @@ import Alerts from "./pages/Alerts";
 import LoadBalancerDetail from "./pages/LoadBalancerDetail";
 import LoadBalancerMetrics from "./pages/LoadBalancerMetrics";
 import Settings from "./pages/Settings";
+import Ratelimiter from "./pages/Ratelimiter";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./Utils/Protectedroute";
 import AuthRoute from "./Utils/AuthRoute";
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/lb/:id/edit" element={<ProtectedRoute><LoadBalancerDetail /></ProtectedRoute>} />
             <Route path="/lb/:id/metrics" element={<ProtectedRoute><LoadBalancerMetrics /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="/ratelimiter" element={<ProtectedRoute><Ratelimiter /></ProtectedRoute>} />
           </Route>
 
           {/* Catch-all */}
