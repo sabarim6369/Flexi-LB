@@ -253,96 +253,121 @@ const deleteitem = async (lbId: string) => {
 
         {/* Load Balancers Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-{Array.isArray(loadBalancers) && loadBalancers.map((lb) => (
-            <Card
-              key={lb.id}
-              className="shadow-sm border-border hover:shadow-md transition-all duration-300"
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="bg-primary/10 p-2 rounded-lg">
-                      {getStatusIcon(lb.status)}
+          {Array.isArray(loadBalancers) && loadBalancers.length > 0 ? (
+            loadBalancers.map((lb) => (
+              <Card
+                key={lb.id}
+                className="shadow-sm border-border hover:shadow-md transition-all duration-300"
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="bg-primary/10 p-2 rounded-lg">
+                        {getStatusIcon(lb.status)}
+                      </div>
+                      <div>
+                        <CardTitle className="text-lg font-semibold text-foreground">
+                          {lb.name}
+                        </CardTitle>
+                        <CardDescription className="text-text-secondary">
+                          {lb.endpoint}
+                        </CardDescription>
+                      </div>
+                    </div>
+                    <Badge
+                      className={`${getStatusBadge(
+                        lb.status
+                      )} capitalize font-medium`}
+                    >
+                      {lb.status}
+                    </Badge>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-text-secondary">Instances</p>
+                      <p className="font-semibold text-foreground">
+                        {lb.activeInstances}/{lb.instances.length}
+                      </p>
                     </div>
                     <div>
-                      <CardTitle className="text-lg font-semibold text-foreground">
-                        {lb.name}
-                      </CardTitle>
-                      <CardDescription className="text-text-secondary">
-                        {lb.endpoint}
-                      </CardDescription>
+                      <p className="text-text-secondary">Requests</p>
+                      <p className="font-semibold text-foreground">
+                        {lb.totalRequests.toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-text-secondary">Avg Latency</p>
+                      <p className="font-semibold text-foreground">
+                        {lb.avgLatency}ms
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-text-secondary">Last Updated</p>
+                      <p className="font-semibold text-foreground">
+                        {lb.lastUpdated}
+                      </p>
                     </div>
                   </div>
-                  <Badge
-                    className={`${getStatusBadge(
-                      lb.status
-                    )} capitalize font-medium`}
-                  >
-                    {lb.status}
-                  </Badge>
-                </div>
-              </CardHeader>
 
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-text-secondary">Instances</p>
-                    <p className="font-semibold text-foreground">
-                      {lb.activeInstances}/{lb.instances.length}
-                    </p>
+                  <div className="flex space-x-2 pt-2">
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/lb/${lb.id}`}>
+                        <Eye className="h-4 w-4 mr-1" />
+                        View
+                      </Link>
+                    </Button>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/lb/${lb.id}/edit`}>
+                        <Edit className="h-4 w-4 mr-1" />
+                        Edit
+                      </Link>
+                    </Button>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to={`/lb/${lb.id}/metrics`}>
+                        <Activity className="h-4 w-4 mr-1" />
+                        Metrics
+                      </Link>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                      onClick={() => deleteitem(lb.id)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Delete
+                    </Button>
                   </div>
-                  <div>
-                    <p className="text-text-secondary">Requests</p>
-                    <p className="font-semibold text-foreground">
-                      {lb.totalRequests.toLocaleString()}
-                    </p>
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <div className="col-span-full">
+              <Card className="shadow-sm border-border">
+                <CardContent className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                  <div className="bg-muted/30 p-4 rounded-full mb-6">
+                    <Server className="h-12 w-12 text-muted-foreground" />
                   </div>
-                  <div>
-                    <p className="text-text-secondary">Avg Latency</p>
-                    <p className="font-semibold text-foreground">
-                      {lb.avgLatency}ms
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-text-secondary">Last Updated</p>
-                    <p className="font-semibold text-foreground">
-                      {lb.lastUpdated}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex space-x-2 pt-2">
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to={`/lb/${lb.id}`}>
-                      <Eye className="h-4 w-4 mr-1" />
-                      View
-                    </Link>
-                  </Button>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to={`/lb/${lb.id}/edit`}>
-                      <Edit className="h-4 w-4 mr-1" />
-                      Edit
-                    </Link>
-                  </Button>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to={`/lb/${lb.id}/metrics`}>
-                      <Activity className="h-4 w-4 mr-1" />
-                      Metrics
-                    </Link>
-                  </Button>
+                  <h3 className="text-xl font-semibold text-foreground mb-2">
+                    No Load Balancers Available
+                  </h3>
+                  <p className="text-text-secondary mb-6 max-w-md">
+                    You haven't created any load balancers yet. Get started by creating your first load balancer to manage your traffic distribution.
+                  </p>
                   <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                    onClick={() => deleteitem(lb.id)}
+                    onClick={() => setIsCreateModalOpen(true)}
+                    className="bg-primary hover:bg-secondary text-primary-foreground shadow-lg transition-all duration-300 hover:shadow-xl"
                   >
-                    <Trash2 className="h-4 w-4 mr-1" />
-                    Delete
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Your First Load Balancer
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
 
         <CreateLBModal
