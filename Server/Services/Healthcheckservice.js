@@ -13,7 +13,7 @@ export const checkInstanceHealth = async (lbId, instance) => {
     instance.metrics.lastLatency = latency;
 
     // ✅ Classify health based on response time
-    if (latency < 200) {
+    if (latency < 500) {
       instance.healthStatus = "healthy";
     } else if (latency < 500) {
       instance.healthStatus = "degraded";
@@ -46,5 +46,5 @@ export const startHealthChecks = () => {
     } catch (err) {
       console.error("Health check error:", err);
     }
-  }, 5000); 
+  }, 1000); 
 };

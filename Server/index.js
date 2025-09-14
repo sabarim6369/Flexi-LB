@@ -43,6 +43,7 @@ const MONGO = process.env.MONGO_URI;
     console.error("Startup error", err);
   }
 })();
+app.get("/", (c) => c.json({ message: "Welcome to FlexiLB API" }));
 startHealthChecks();
 export default{
   port: PORT,
