@@ -37,8 +37,13 @@ const Ratelimiter = () => {
   const openModal = (lb) => {
     setSelectedLB(lb);
     setShowModal(true);
-    setLimit("");
-    setWindow("");
+    if (lb.rateLimiterOn && lb.rateLimiter) {
+      setLimit(lb.rateLimiter.limit.toString());
+      setWindow(lb.rateLimiter.window.toString());
+    } else {
+      setLimit("");
+      setWindow("");
+    }
     setError("");
   };
 
@@ -55,12 +60,37 @@ const Ratelimiter = () => {
         window: Number(window)
       });   
       setShowModal(false);
-      toast.success(`Rate limit set successfully for ${selectedLB.name}`);
+      toast.success(`Rate limit ${selectedLB.rateLimiterOn ? 'updated' : 'set'} successfully for ${selectedLB.name}`);
       setLimit("");
       setWindow("");
+      
+      // Refresh the load balancers list to show updated status
+      const res = await axiosInstance.get(`${apiurl}/lbs/ratelimiter/status`);
+      if (res.data && Array.isArray(res.data.lbs)) {
+        setLoadBalancers(res.data.lbs);
+      }
     } catch (e) {
       setError("Failed to set rate limit");
       toast.error("Failed to set rate limit");
+    }
+    setLoading(false);
+  };
+
+  const handleDisableRateLimit = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      await axiosInstance.delete(`${apiurl}/lbs/${selectedLB._id}/ratelimit`);
+      setShowModal(false);
+      toast.success(`Rate limiter disabled for ${selectedLB.name}`);
+      
+      const res = await axiosInstance.get(`${apiurl}/lbs/ratelimiter/status`);
+      if (res.data && Array.isArray(res.data.lbs)) {
+        setLoadBalancers(res.data.lbs);
+      }
+    } catch (e) {
+      setError("Failed to disable rate limit");
+      toast.error("Failed to disable rate limit");
     }
     setLoading(false);
   };
@@ -131,7 +161,9 @@ const Ratelimiter = () => {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-600">Rate Limits Configured</p>
-                    <p className="text-2xl font-bold text-gray-900">{loadBalancers.length}</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {loadBalancers.filter(lb => lb.rateLimiterOn).length}
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -180,25 +212,51 @@ const Ratelimiter = () => {
                         <Activity className="h-3 w-3 mr-1" />
                         {lb.instances?.filter(i => i.isHealthy)?.length || 0} Healthy
                       </Badge>
+                      {lb.rateLimiterOn ? (
+                        <Badge className="bg-green-100 text-green-800 border-green-200">
+                          <Shield className="h-3 w-3 mr-1" />
+                          Rate Limit ON
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-gray-100 text-gray-600 border-gray-300">
+                          <Shield className="h-3 w-3 mr-1" />
+                          Rate Limit OFF
+                        </Badge>
+                      )}
                     </div>
+
+                    {/* Rate Limiter Info */}
+                    {lb.rateLimiterOn && lb.rateLimiter && (
+                      <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                        <p className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-1">Current Rate Limit</p>
+                        <p className="text-sm text-blue-800">
+                          <span className="font-semibold">{lb.rateLimiter.limit}</span> requests per{' '}
+                          <span className="font-semibold">{lb.rateLimiter.window}</span> seconds
+                        </p>
+                      </div>
+                    )}
 
                     <Dialog open={showModal && selectedLB?._id === lb._id} onOpenChange={setShowModal}>
                       <DialogTrigger asChild>
                         <Button 
                           onClick={() => openModal(lb)}
-                          className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                          className={`w-full ${lb.rateLimiterOn 
+                            ? 'bg-orange-600 hover:bg-orange-700' 
+                            : 'bg-blue-600 hover:bg-blue-700'
+                          } text-white`}
                         >
                           <Settings className="h-4 w-4 mr-2" />
-                          Configure Rate Limit
+                          {lb.rateLimiterOn ? 'Edit Rate Limit' : 'Configure Rate Limit'}
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="sm:max-w-md">
                         <DialogHeader>
                           <DialogTitle className="text-xl font-semibold text-gray-900">
-                            Set Rate Limit
+                            {selectedLB?.rateLimiterOn ? 'Edit Rate Limit' : 'Set Rate Limit'}
                           </DialogTitle>
                           <p className="text-gray-600">
-                            Configure rate limiting for <span className="font-medium text-blue-600">{selectedLB?.name}</span>
+                            {selectedLB?.rateLimiterOn ? 'Update' : 'Configure'} rate limiting for{' '}
+                            <span className="font-medium text-blue-600">{selectedLB?.name}</span>
                           </p>
                         </DialogHeader>
                         
@@ -251,6 +309,25 @@ const Ratelimiter = () => {
                             >
                               Cancel
                             </Button>
+                            
+                            {selectedLB?.rateLimiterOn && (
+                              <Button 
+                                onClick={handleDisableRateLimit} 
+                                disabled={loading}
+                                variant="outline"
+                                className="flex-1 text-red-600 border-red-300 hover:bg-red-50"
+                              >
+                                {loading ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600 mr-2"></div>
+                                    Disabling...
+                                  </>
+                                ) : (
+                                  'Turn Off'
+                                )}
+                              </Button>
+                            )}
+                            
                             <Button 
                               onClick={handleSetRateLimit} 
                               disabled={loading}
@@ -259,12 +336,12 @@ const Ratelimiter = () => {
                               {loading ? (
                                 <>
                                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                  Setting...
+                                  {selectedLB?.rateLimiterOn ? 'Updating...' : 'Setting...'}
                                 </>
                               ) : (
                                 <>
                                   <Shield className="h-4 w-4 mr-2" />
-                                  Set Rate Limit
+                                  {selectedLB?.rateLimiterOn ? 'Update Rate Limit' : 'Set Rate Limit'}
                                 </>
                               )}
                             </Button>

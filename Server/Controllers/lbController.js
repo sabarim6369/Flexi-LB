@@ -629,7 +629,7 @@ export async function getRateLimit(c) {
     const user = c.get("user");
     const { id } = c.req.param();
 
-    const lb = await LoadBalancer.findOne({ _id: id, owner: user._id });
+    const lb = await LoadBalancer.findOne({ _id: id, owner: user.id });
     if (!lb) {
       return c.json({ error: "Load balancer not found" }, 404);
     }
@@ -651,7 +651,7 @@ export async function updateRateLimit(c) {
     const { id } = c.req.param();
     const { limit, window, rateLimiterOn } = await c.req.json();
 
-    const lb = await LoadBalancer.findOne({ _id: id, owner: user._id });
+    const lb = await LoadBalancer.findOne({ _id: id, owner: user.id });
     if (!lb) {
       return c.json({ error: "Load balancer not found" }, 404);
     }
@@ -686,7 +686,7 @@ export async function disableRateLimit(c) {
     const user = c.get("user");
     const { id } = c.req.param();
 
-    const lb = await LoadBalancer.findOne({ _id: id, owner: user._id });
+    const lb = await LoadBalancer.findOne({ _id: id, owner: user.id });
     if (!lb) {
       return c.json({ error: "Load balancer not found" }, 404);
     }
@@ -713,9 +713,7 @@ export async function listLBsForRateLimiterStatus(c) {
     let totalInstances = 0;
     let totalRequests = 0;
     let totalLatency = 0;
-    let totalRateLimiterOn = 0; // NEW: count of LBs with rate limiting enabled
-
-    // iterate over LBs
+    let totalRateLimiterOn = 0; 
     lbs.forEach(lb => {
       totalInstances += lb.instances.length;
       if (lb.rateLimiterOn) totalRateLimiterOn++; // NEW
