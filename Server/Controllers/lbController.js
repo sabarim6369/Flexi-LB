@@ -1,7 +1,10 @@
 import LoadBalancer from "../Models/LoadBalancer.js";
+import { getAgentForUrl } from "../Services/connectionPoolService.js";
 import slugify from "slugify";
 import axios from 'axios'
-const rrState = new Map();
+import http from "http";
+import https from "https";
+
 
 function selectInstance(lb) {
   const healthy = lb.instances.filter(i => i.isHealthy);
@@ -301,7 +304,7 @@ function pickInstance(lb, clientIp) {
       return healthyInstances[0]; // fallback
   }
 }
-
+const agentMap = new Map(); 
 export async function proxyRequest(c) {
   const slug = c.req.param("slug");
   const path = c.req.param("*") || "";
@@ -356,13 +359,15 @@ export async function proxyRequest(c) {
   try {
     const targetUrl = `${instance.url}/${path}`;
     const method = c.req.method;
-
+  const agent = getAgentForUrl(instance.url); 
     const response = await axios({
       url: targetUrl,
       method,
       data: method !== "GET" ? await c.req.json().catch(() => null) : undefined,
       headers: c.req.header(),
       validateStatus: () => true,
+          httpAgent: agent,
+      httpsAgent: agent,
     });
 
     return c.newResponse(
@@ -422,7 +427,7 @@ export const getLBMetrics = async (c) => {
     let totalLatencySum = 0;
     let failureSum = 0;
 
-    // Prepare instances array
+   
     const instances = lb.instances.map((inst) => {
       const instRequests = inst.metrics.requests || 0;
       const instFailures = inst.metrics.failures || 0;
