@@ -4,7 +4,7 @@ import slugify from "slugify";
 import axios from 'axios'
 import http from "http";
 import https from "https";
-
+const rrState = new Map();
 
 function selectInstance(lb) {
   const healthy = lb.instances.filter(i => i.isHealthy);
