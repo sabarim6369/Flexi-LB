@@ -1,11 +1,11 @@
 import express from "express";
 import cors from "cors";
 
-app.use(cors());
+
 
 const app = express();
 const PORT = 4002;
-
+app.use(cors());
 app.get("/", (req, res) => {
   res.json({
     server: "Server 2",
