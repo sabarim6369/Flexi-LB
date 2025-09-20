@@ -1,0 +1,335 @@
+{
+  "validUsers": [
+    {
+      "name": "John Doe",
+      "email": "john.doe@flexilb.com",
+      "username": "johndoe",
+      "password": "TestPassword123!",
+      "confirmPassword": "TestPassword123!"
+    },
+    {
+      "name": "Jane Smith",
+      "email": "jane.smith@flexilb.com",
+      "username": "janesmith",
+      "password": "SecurePass456@",
+      "confirmPassword": "SecurePass456@"
+    },
+    {
+      "name": "Test User",
+      "email": "test.user@flexilb.com",
+      "username": "testuser",
+      "password": "ValidPassword789#",
+      "confirmPassword": "ValidPassword789#"
+    }
+  ],
+  "invalidUsers": [
+    {
+      "name": "",
+      "email": "empty.name@flexilb.com",
+      "username": "emptyname",
+      "password": "TestPassword123!",
+      "confirmPassword": "TestPassword123!",
+      "expectedError": "Missing fields"
+    },
+    {
+      "name": "Invalid Email User",
+      "email": "invalid-email",
+      "username": "invalidemail",
+      "password": "TestPassword123!",
+      "confirmPassword": "TestPassword123!",
+      "expectedError": "Invalid email format"
+    },
+    {
+      "name": "Weak Password User",
+      "email": "weak.password@flexilb.com",
+      "username": "weakpassword",
+      "password": "weak",
+      "confirmPassword": "weak",
+      "expectedError": "Password too weak"
+    },
+    {
+      "name": "Password Mismatch User",
+      "email": "mismatch@flexilb.com",
+      "username": "mismatch",
+      "password": "TestPassword123!",
+      "confirmPassword": "DifferentPassword456@",
+      "expectedError": "Passwords do not match"
+    },
+    {
+      "name": "Existing User",
+      "email": "existing@flexilb.com",
+      "username": "existing",
+      "password": "TestPassword123!",
+      "confirmPassword": "TestPassword123!",
+      "expectedError": "User exists"
+    }
+  ],
+  "loginCredentials": [
+    {
+      "email": "valid.user@flexilb.com",
+      "password": "ValidPassword123!",
+      "valid": true
+    },
+    {
+      "email": "john.doe@flexilb.com",
+      "password": "TestPassword123!",
+      "valid": true
+    },
+    {
+      "email": "nonexistent@flexilb.com",
+      "password": "SomePassword123!",
+      "valid": false,
+      "expectedError": "Invalid credentials"
+    },
+    {
+      "email": "valid.user@flexilb.com",
+      "password": "wrongpassword",
+      "valid": false,
+      "expectedError": "Invalid credentials"
+    },
+    {
+      "email": "invalid-email",
+      "password": "SomePassword123!",
+      "valid": false,
+      "expectedError": "Invalid email format"
+    },
+    {
+      "email": "",
+      "password": "SomePassword123!",
+      "valid": false,
+      "expectedError": "Missing fields"
+    },
+    {
+      "email": "valid.user@flexilb.com",
+      "password": "",
+      "valid": false,
+      "expectedError": "Missing fields"
+    }
+  ],
+  "passwordValidation": [
+    {
+      "password": "TestPassword123!",
+      "description": "Strong password with all requirements",
+      "valid": true,
+      "requirements": {
+        "minLength": true,
+        "hasUppercase": true,
+        "hasLowercase": true,
+        "hasNumber": true,
+        "hasSpecialChar": true
+      }
+    },
+    {
+      "password": "weak",
+      "description": "Too short, no uppercase, no number, no special char",
+      "valid": false,
+      "requirements": {
+        "minLength": false,
+        "hasUppercase": false,
+        "hasLowercase": true,
+        "hasNumber": false,
+        "hasSpecialChar": false
+      }
+    },
+    {
+      "password": "NoNumbers!",
+      "description": "Missing numbers",
+      "valid": false,
+      "requirements": {
+        "minLength": true,
+        "hasUppercase": true,
+        "hasLowercase": true,
+        "hasNumber": false,
+        "hasSpecialChar": true
+      }
+    },
+    {
+      "password": "nonumbersorspecial",
+      "description": "Missing uppercase, numbers, and special characters",
+      "valid": false,
+      "requirements": {
+        "minLength": true,
+        "hasUppercase": false,
+        "hasLowercase": true,
+        "hasNumber": false,
+        "hasSpecialChar": false
+      }
+    },
+    {
+      "password": "PASSWORD123!",
+      "description": "Missing lowercase",
+      "valid": false,
+      "requirements": {
+        "minLength": true,
+        "hasUppercase": true,
+        "hasLowercase": false,
+        "hasNumber": true,
+        "hasSpecialChar": true
+      }
+    }
+  ],
+  "emailValidation": [
+    {
+      "email": "valid@example.com",
+      "valid": true,
+      "description": "Valid email format"
+    },
+    {
+      "email": "user.name@domain.com",
+      "valid": true,
+      "description": "Valid email with dot in local part"
+    },
+    {
+      "email": "user+tag@example.org",
+      "valid": true,
+      "description": "Valid email with plus sign"
+    },
+    {
+      "email": "invalid-email",
+      "valid": false,
+      "description": "Missing @ and domain"
+    },
+    {
+      "email": "@domain.com",
+      "valid": false,
+      "description": "Missing local part"
+    },
+    {
+      "email": "user@",
+      "valid": false,
+      "description": "Missing domain"
+    },
+    {
+      "email": "user@domain",
+      "valid": false,
+      "description": "Missing top-level domain"
+    },
+    {
+      "email": "user name@domain.com",
+      "valid": false,
+      "description": "Space in local part"
+    },
+    {
+      "email": "",
+      "valid": false,
+      "description": "Empty email"
+    }
+  ],
+  "testScenarios": {
+    "signup": {
+      "validSignup": {
+        "description": "User signs up with valid information",
+        "steps": [
+          "Navigate to signup page",
+          "Fill in valid user information",
+          "Accept terms and conditions",
+          "Click signup button",
+          "Verify success message",
+          "Verify navigation to dashboard"
+        ]
+      },
+      "duplicateEmail": {
+        "description": "User tries to signup with existing email",
+        "steps": [
+          "Navigate to signup page",
+          "Fill in user information with existing email",
+          "Accept terms and conditions",
+          "Click signup button",
+          "Verify error message about existing user"
+        ]
+      },
+      "passwordMismatch": {
+        "description": "User enters mismatched passwords",
+        "steps": [
+          "Navigate to signup page",
+          "Fill in user information",
+          "Enter different password in confirm field",
+          "Accept terms and conditions",
+          "Click signup button",
+          "Verify password mismatch error"
+        ]
+      },
+      "termsNotAccepted": {
+        "description": "User tries to signup without accepting terms",
+        "steps": [
+          "Navigate to signup page",
+          "Fill in valid user information",
+          "Do not accept terms and conditions",
+          "Click signup button",
+          "Verify terms acceptance required error"
+        ]
+      }
+    },
+    "login": {
+      "validLogin": {
+        "description": "User logs in with valid credentials",
+        "steps": [
+          "Navigate to login page",
+          "Enter valid email and password",
+          "Click login button",
+          "Verify success message",
+          "Verify navigation to dashboard"
+        ]
+      },
+      "invalidCredentials": {
+        "description": "User tries to login with invalid credentials",
+        "steps": [
+          "Navigate to login page",
+          "Enter invalid email or password",
+          "Click login button",
+          "Verify error message about invalid credentials"
+        ]
+      },
+      "emptyFields": {
+        "description": "User tries to login with empty fields",
+        "steps": [
+          "Navigate to login page",
+          "Leave email and/or password empty",
+          "Click login button",
+          "Verify validation error messages"
+        ]
+      },
+      "rememberMe": {
+        "description": "User logs in with remember me option",
+        "steps": [
+          "Navigate to login page",
+          "Enter valid credentials",
+          "Check remember me checkbox",
+          "Click login button",
+          "Verify successful login",
+          "Verify remember me functionality"
+        ]
+      }
+    }
+  },
+  "navigationFlows": [
+    {
+      "name": "signup_to_login",
+      "description": "Navigate from signup to login page",
+      "startPage": "signup",
+      "endPage": "login",
+      "action": "click_login_link"
+    },
+    {
+      "name": "login_to_signup", 
+      "description": "Navigate from login to signup page",
+      "startPage": "login",
+      "endPage": "signup",
+      "action": "click_signup_link"
+    },
+    {
+      "name": "successful_login_to_dashboard",
+      "description": "Successful login redirects to dashboard",
+      "startPage": "login",
+      "endPage": "dashboard",
+      "action": "valid_login"
+    },
+    {
+      "name": "successful_signup_to_dashboard",
+      "description": "Successful signup redirects to dashboard",
+      "startPage": "signup",
+      "endPage": "dashboard",
+      "action": "valid_signup"
+    }
+  ]
+}
