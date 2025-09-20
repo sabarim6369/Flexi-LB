@@ -1,0 +1,290 @@
+{
+  "login": {
+    "success": {
+      "english": "Login successful 🎉",
+      "variations": [
+        "Login successful",
+        "Successfully logged in",
+        "Welcome back"
+      ]
+    },
+    "invalidCredentials": {
+      "english": "Invalid credentials or server error ❌",
+      "variations": [
+        "Invalid credentials",
+        "Invalid email or password",
+        "Login failed",
+        "Authentication failed"
+      ]
+    },
+    "missingFields": {
+      "english": "Please enter email and password ⚠️",
+      "variations": [
+        "Please enter email and password",
+        "Email and password are required",
+        "Missing credentials",
+        "Please fill in all fields"
+      ]
+    },
+    "invalidEmail": {
+      "english": "Please enter a valid email address ⚠️",
+      "variations": [
+        "Invalid email format",
+        "Please enter a valid email",
+        "Email format is incorrect"
+      ]
+    },
+    "serverError": {
+      "english": "Server error. Please try again later ❌",
+      "variations": [
+        "Server error",
+        "Connection failed",
+        "Please try again later",
+        "Network error"
+      ]
+    }
+  },
+  "signup": {
+    "success": {
+      "english": "Signup successful 🎉",
+      "variations": [
+        "Account created successfully",
+        "Registration successful",
+        "Welcome to FlexiLB"
+      ]
+    },
+    "userExists": {
+      "english": "User already exists with this email ❌",
+      "variations": [
+        "User exists",
+        "Email already registered",
+        "Account with this email already exists",
+        "User already registered"
+      ]
+    },
+    "missingFields": {
+      "english": "Please fill in all required fields ⚠️",
+      "variations": [
+        "Missing fields",
+        "Please complete all fields",
+        "All fields are required",
+        "Please fill in all required fields"
+      ]
+    },
+    "passwordMismatch": {
+      "english": "Passwords do not match ⚠️",
+      "variations": [
+        "Passwords do not match",
+        "Password confirmation does not match",
+        "Passwords must match",
+        "Confirm password must match"
+      ]
+    },
+    "weakPassword": {
+      "english": "Password must be at least 8 characters with uppercase, lowercase, number and special character ⚠️",
+      "variations": [
+        "Password too weak",
+        "Password does not meet requirements",
+        "Please choose a stronger password",
+        "Password must contain uppercase, lowercase, number and special character"
+      ]
+    },
+    "invalidEmail": {
+      "english": "Please enter a valid email address ⚠️",
+      "variations": [
+        "Invalid email format",
+        "Please enter a valid email",
+        "Email format is incorrect"
+      ]
+    },
+    "termsNotAccepted": {
+      "english": "Please accept the terms and conditions ⚠️",
+      "variations": [
+        "Terms and conditions must be accepted",
+        "Please agree to the terms of service",
+        "You must accept the terms and conditions"
+      ]
+    },
+    "serverError": {
+      "english": "Server error. Please try again later ❌",
+      "variations": [
+        "Server error",
+        "Registration failed",
+        "Please try again later",
+        "Network error"
+      ]
+    }
+  },
+  "formValidation": {
+    "required": {
+      "english": "This field is required",
+      "variations": [
+        "Required field",
+        "This field cannot be empty",
+        "Please fill this field"
+      ]
+    },
+    "emailFormat": {
+      "english": "Please enter a valid email address",
+      "variations": [
+        "Invalid email format",
+        "Email must be valid",
+        "Please check email format"
+      ]
+    },
+    "passwordLength": {
+      "english": "Password must be at least 8 characters",
+      "variations": [
+        "Password too short",
+        "Minimum 8 characters required",
+        "Password length insufficient"
+      ]
+    },
+    "passwordStrength": {
+      "english": "Password must contain uppercase, lowercase, number and special character",
+      "variations": [
+        "Password not strong enough",
+        "Password requirements not met",
+        "Password must be stronger"
+      ]
+    },
+    "passwordMatch": {
+      "english": "Passwords must match",
+      "variations": [
+        "Password confirmation incorrect",
+        "Passwords do not match",
+        "Confirm password must match"
+      ]
+    }
+  },
+  "navigation": {
+    "redirecting": {
+      "english": "Redirecting...",
+      "variations": [
+        "Please wait",
+        "Loading dashboard",
+        "Redirecting to dashboard"
+      ]
+    },
+    "loading": {
+      "english": "Loading...",
+      "variations": [
+        "Please wait",
+        "Processing",
+        "Loading page"
+      ]
+    }
+  },
+  "buttons": {
+    "login": {
+      "default": "Sign In",
+      "loading": "Signing In...",
+      "variations": [
+        "Login",
+        "Sign In",
+        "Continue"
+      ]
+    },
+    "signup": {
+      "default": "Create Account",
+      "loading": "Creating Account...",
+      "variations": [
+        "Sign Up",
+        "Register",
+        "Create Account",
+        "Join FlexiLB"
+      ]
+    },
+    "forgotPassword": {
+      "default": "Forgot password?",
+      "variations": [
+        "Reset password",
+        "Forgot password",
+        "Password recovery"
+      ]
+    }
+  },
+  "placeholders": {
+    "name": {
+      "english": "Enter your full name",
+      "variations": [
+        "Full name",
+        "Your name",
+        "Enter name"
+      ]
+    },
+    "email": {
+      "english": "Enter your email",
+      "variations": [
+        "Email address",
+        "Your email",
+        "Enter email address"
+      ]
+    },
+    "password": {
+      "login": "Enter your password",
+      "signup": "Create a password",
+      "variations": [
+        "Password",
+        "Your password",
+        "Enter password"
+      ]
+    },
+    "confirmPassword": {
+      "english": "Confirm your password",
+      "variations": [
+        "Repeat password",
+        "Confirm password",
+        "Re-enter password"
+      ]
+    }
+  },
+  "labels": {
+    "name": "Full Name",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "rememberMe": "Remember me",
+    "termsAndConditions": "I agree to the Terms of Service and Privacy Policy"
+  },
+  "links": {
+    "forgotPassword": "Forgot password?",
+    "createAccount": "Create an account",
+    "signIn": "Sign in",
+    "termsOfService": "Terms of Service",
+    "privacyPolicy": "Privacy Policy"
+  },
+  "headings": {
+    "login": {
+      "primary": "Welcome Back",
+      "secondary": "Sign in to your FlexiLB dashboard"
+    },
+    "signup": {
+      "primary": "Join FlexiLB",
+      "secondary": "Create your account to get started"
+    }
+  },
+  "branding": {
+    "appName": "FlexiLB",
+    "tagline": "Intelligent Load Balancing",
+    "description": "Distribute your traffic efficiently with our advanced load balancing solution",
+    "copyright": "© 2025 FlexiLB. All rights reserved."
+  },
+  "accessibility": {
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "loading": "Loading",
+    "required": "required field",
+    "optional": "optional field"
+  },
+  "testMessages": {
+    "pageLoaded": "Page loaded successfully",
+    "elementFound": "Element found",
+    "elementNotFound": "Element not found",
+    "actionCompleted": "Action completed",
+    "testPassed": "Test passed",
+    "testFailed": "Test failed",
+    "validationPassed": "Validation passed",
+    "validationFailed": "Validation failed"
+  }
+}
