@@ -1,4 +1,4 @@
-// tests/userController.test.js
+
 import { describe, it, expect } from "bun:test";
 import * as userController from "../Controllers/authController.js";
 import { User } from "./mocks/user.js";
@@ -18,7 +18,7 @@ describe("User Controller Tests", () => {
 
   it("login should return user and token for correct credentials", async () => {
     const hashed = await bcrypt.hash("123456", 10);
-    // Override mock temporarily
+    
     User.findOne = async () => ({ _id: "1", email: "exist@test.com", username: "existuser", password: hashed });
 
     const c = createContext({ body: { email: "exist@test.com", password: "123456" } });
@@ -31,7 +31,7 @@ describe("User Controller Tests", () => {
 
   it("changePassword updates password if old password correct", async () => {
     const hashedOld = await bcrypt.hash("oldpass", 10);
-    // Override mock for this test
+    
     User.findById = async () => ({ password: hashedOld, save: async () => {}, _id: "valid-id" });
 
     const c = createContext({ body: { oldPassword: "oldpass", newPassword: "newpass" }, user: { id: "valid-id" } });
