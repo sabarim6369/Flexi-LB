@@ -178,10 +178,10 @@ export default function Metrics() {
                   <p className="text-sm text-text-secondary">Avg Latency</p>
                   <p
                     className={`text-2xl font-bold ${getLatencyColor(
-                      metricsData.overview.avgLatency
+                      metricsData.overview.avgLatency/1000
                     )}`}
                   >
-                    {metricsData.overview.avgLatency}ms
+  {(metricsData.overview.avgLatency / 1000).toFixed(1)} ms
                   </p>
                 </div>
                 <div className="bg-secondary/10 p-2 rounded-full">
@@ -196,13 +196,14 @@ export default function Metrics() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-text-secondary">Error Rate</p>
-                  <p
-                    className={`text-2xl font-bold ${getErrorRateColor(
-                      metricsData.overview.errorRate
-                    )}`}
-                  >
-                    {metricsData.overview.errorRate}%
-                  </p>
+                <p
+  className={`text-2xl font-bold ${getErrorRateColor(
+    metricsData.overview.errorRate * 100 // scale to %
+  )}`}
+>
+{(metricsData.overview.avgLatency / 1000).toFixed(2)} ms
+</p>
+
                 </div>
                 <div className="bg-warning/10 p-2 rounded-full">
                   <AlertTriangle className="h-5 w-5 text-warning" />
