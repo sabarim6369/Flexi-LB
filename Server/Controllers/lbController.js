@@ -305,6 +305,8 @@ function pickInstance(lb, clientIp) {
   }
 }
 const agentMap = new Map(); 
+const rateLimitStore = new Map(); // global store: key = lb._id + ip
+
 export async function proxyRequest(c) {
   const slug = c.req.param("slug");
   const path = c.req.param("*") || "";
@@ -319,28 +321,28 @@ export async function proxyRequest(c) {
     c.req.header("x-real-ip") ||
     "127.0.0.1";
 
-  if (lb.rateLimiterOn) {
-    const limit = lb.rateLimiter.limit;
-    const windowSec = lb.rateLimiter.window;
+if (lb.rateLimiterOn) {
+  const limit = lb.rateLimiter.limit;
+  const windowSec = lb.rateLimiter.window;
 
-    if (!lb._rateLimitStore) lb._rateLimitStore = new Map();
-    const now = Date.now();
+  const now = Date.now();
+  const key = `${lb._id}:${clientIp}`; // unique per load balancer + IP
+  const record = rateLimitStore.get(key) || { count: 0, start: now };
 
-    const key = clientIp;
-    const record = lb._rateLimitStore.get(key) || { count: 0, start: now };
-    
-    if (now - record.start < windowSec * 1000) {
-      if (record.count >= limit) {
-        return c.json({ error: "Rate limit exceeded" }, 429);
-      } else {
-        record.count += 1;
-      }
+  if (now - record.start < windowSec * 1000) {
+    if (record.count >= limit) {
+      return c.json({ error: "Rate limit exceeded" }, 429);
     } else {
-      record.count = 1;
-      record.start = now;
+      record.count += 1;
     }
-    lb._rateLimitStore.set(key, record);
+  } else {
+    record.count = 1;
+    record.start = now;
   }
+
+  rateLimitStore.set(key, record);
+}
+
 
   const instance = pickInstance(lb, clientIp);
   if (!instance) {
