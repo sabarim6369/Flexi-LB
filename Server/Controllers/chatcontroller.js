@@ -9,25 +9,22 @@ const client = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-// Helper function to detect if query is load balancer related
+// Helper: Detect if message is related to Load Balancer
 function isLoadBalancerQuery(message) {
   const keywords = [
     'load balancer', 'loadbalancer', 'lb', 'create', 'show', 'list', 'delete', 
     'metrics', 'configure', 'instances', 'health', 'algorithm', 'round robin',
     'least connections', 'random', 'status', 'performance'
   ];
-  
-  return keywords.some(keyword => 
+  return keywords.some(keyword =>
     message.toLowerCase().includes(keyword.toLowerCase())
   );
 }
 
-// Helper function to get load balancer data
+// Helper: Get current load balancer context for a user
 async function getLoadBalancerContext(userId) {
   try {
-    console.log(userId)
-const loadBalancers = await LoadBalancer.find({ owner: userId });
-    console.log(loadBalancers)
+    const loadBalancers = await LoadBalancer.find({ owner: userId });
     return loadBalancers.map(lb => ({
       id: lb._id,
       name: lb.name,
@@ -37,146 +34,156 @@ const loadBalancers = await LoadBalancer.find({ owner: userId });
       totalRequests: lb.instances?.reduce((sum, i) => sum + (i.metrics?.requests || 0), 0) || 0,
       createdAt: lb.createdAt
     }));
-
   } catch (error) {
     console.error('Error fetching load balancer context:', error);
     return [];
   }
 }
 
-function needsActionExecution(message) {
-  const actionKeywords = [
-    'create', 'delete', 'remove', 'add instance', 'set rate', 'disable rate',
-    'update', 'configure', 'health check'
-  ];
-  
-  return actionKeywords.some(keyword => 
-    message.toLowerCase().includes(keyword.toLowerCase())
-  );
+function parseLoadBalancerCommand(message) {
+  const lines = message.split(/\r?\n/).map(l => l.trim());
+  const lb = { action: "create_loadbalancer", criteria: {}, parameters: { instances: [] } };
+  let instanceUrl = null;
+  let instanceCount = 1;
+
+  for (let line of lines) {
+    // LB name
+    if (/loadbalcer\s*name\s*[:=]\s*(\S+)/i.test(line)) {
+      lb.criteria.name = line.match(/loadbalcer\s*name\s*[:=]\s*(\S+)/i)[1];
+    }
+
+    // Algorithm
+    if (/algo\s*[:=]\s*(\S+)/i.test(line)) {
+      const algo = line.match(/algo\s*[:=]\s*(\S+)/i)[1].toLowerCase();
+      lb.parameters.algorithm = algo === 'roundrobin' ? 'round_robin' : algo;
+    }
+
+    // Instance count
+    if (/instacen\s*count\s*[:=]\s*(\d+)/i.test(line)) {
+      instanceCount = parseInt(line.match(/instacen\s*count\s*[:=]\s*(\d+)/i)[1], 10);
+    }
+
+    // URL
+    if (/url\s*[:=]\s*(\S+)/i.test(line)) {
+      instanceUrl = line.match(/url\s*[:=]\s*(\S+)/i)[1];
+    }
+  }
+
+  // Populate instances array
+  if (instanceUrl) {
+    lb.parameters.instances = Array(instanceCount)
+      .fill(0)
+      .map((_, i) => ({ url: instanceUrl, name: `instance${i + 1}` }));
+  }
+
+  return lb;
 }
 
+
+// Main Chat Function
 export async function chat(c) {
   try {
     const body = await c.req.json();
     const { message, role = "assistant", temperature = 0.7, responseFormat = "text" } = body;
-    const user = c.get("user"); // Assuming user is set by auth middleware
+    const user = c.get("user");
 
-    if (!user) {
-      return c.json({ error: "Authentication required" }, 401);
-    }
+    if (!user) return c.json({ error: "Authentication required" }, 401);
 
-    let systemPrompt = "";
     let aiModel = "llama-3.1-8b-instant";
     let aiTemperature = temperature;
-    
-    // Auto-detect if we need JSON action mode
-    const shouldUseJsonMode = role === "JSON Responder" || responseFormat === "json" || needsActionExecution(message);
 
-    if (shouldUseJsonMode) {
-     
-      systemPrompt = `You are FlexiLB AI. Convert user queries into JSON actions for load balancer management.
+    // Step 1: Ask AI for intent: EXECUTE or SUGGEST
+    const intentPrompt = `
+You are an assistant that decides whether a user wants to execute a load balancer action or just get a suggestion.
 
-Supported actions:
-- create_loadbalancer: Create new load balancer
-- delete_loadbalancer: Delete existing load balancer  
-- update_loadbalancer: Modify load balancer settings
-- get_status: Get load balancer status/metrics
-- add_instance: Add backend instance to load balancer
-- remove_instance: Remove backend instance
-- health_check: Check health of instances
-- set_ratelimit: Set rate limiting on load balancer
-- remove_ratelimit: Remove rate limiting from load balancer
-- update_ratelimit: Update rate limit settings
+Message: """${message}"""
 
-Examples:
-- "create lb named myapp" → {"action": "create_loadbalancer", "criteria": {"name": "myapp"}, "parameters": {"algorithm": "round_robin"}}
-- "create loadbalancer mcplb roundrobin algorithm instacecount 1 url http://localhost:8080/chat" → {"action": "create_loadbalancer", "criteria": {"name": "mcplb"}, "parameters": {"algorithm": "round_robin", "instances": [{"url": "http://localhost:8080/chat", "id": "instance1"}]}}
-- "delete lb myapp" → {"action": "delete_loadbalancer", "criteria": {"name": "myapp"}}
-- "set rate limit 100 requests per minute on myapp" → {"action": "set_ratelimit", "criteria": {"name": "myapp"}, "parameters": {"limit": 100, "window": 60}}
-- "add instance http://server1.com to myapp" → {"action": "add_instance", "criteria": {"name": "myapp"}, "parameters": {"instance": {"url": "http://server1.com", "id": "server1"}}}
-- "health check myapp" → {"action": "health_check", "criteria": {"name": "myapp"}}
-- "show load balancers" → {"action": "get_status", "criteria": {}}
+Answer ONLY with one word:
+- "EXECUTE" → if user wants to create/delete/update/etc immediately
+- "SUGGEST" → if user is asking for guidance, help, or suggestions
+`;
+    const intentResponse = await client.chat.completions.create({
+      model: aiModel,
+      messages: [{ role: "system", content: intentPrompt }],
+      temperature: 0
+    });
 
-Always return valid JSON with this structure:
-{
-  "action": "action_name",
-  "criteria": {
-    "name": "lb-name"
-  },
-  "parameters": {
-    "key": "value"
-  }
-}
+    const intent = intentResponse.choices[0].message.content.trim().toUpperCase();
+    const shouldExecute = intent === "EXECUTE";
 
-Return only JSON, no explanations.`;
+    // Step 2: Prepare action JSON if execution is needed
+    let actionData = null;
+    if (shouldExecute) {
+      if (/create.*load\s?balancer|create.*lb/i.test(message)) {
+        actionData = parseLoadBalancerCommand(message);
+      } else {
+        const systemPrompt = `Convert the following user request into a valid JSON action for load balancer management.
+User request: """${message}"""
+Return ONLY JSON with fields "action", "criteria", "parameters".`;
+        
+        const jsonResponse = await client.chat.completions.create({
+          model: aiModel,
+          messages: [{ role: "system", content: systemPrompt }],
+          temperature: 0.1
+        });
 
-      aiTemperature = 0.1; // Low temperature for structured output
-    } else {
-      // Regular chat mode with load balancer context
-      const lbData = await getLoadBalancerContext(user.id);
-      
-      systemPrompt = `You are FlexiLB Assistant, a specialized AI for load balancer management.
+        try {
+          actionData = JSON.parse(jsonResponse.choices[0].message.content);
+        } catch (err) {
+          console.error("Failed to parse JSON from AI:", err);
+        }
+      }
+    }
 
+    // Step 3: Execute action if we have valid JSON
+    let executionResult = null;
+    if (actionData) {
+      executionResult = await executeAction(actionData, user.id);
+    }
+
+    // Step 4: Prepare normal chat response if needed
+    const lbData = await getLoadBalancerContext(user.id);
+    const systemPrompt = `You are FlexiLB Assistant, specialized in load balancer management.
 Current Load Balancers:
 ${lbData.length > 0 ? lbData.map(lb => 
   `- ${lb.name} (${lb.algorithm}): ${lb.healthyInstances}/${lb.instanceCount} healthy instances, ${lb.totalRequests} total requests`
 ).join('\n') : 'No load balancers found.'}
 
 Available Operations:
-1. "show load balancers" / "list lb" - Display current load balancers
-2. "create load balancer [name]" - Guide user through LB creation
-3. "delete load balancer [name]" - Help with LB deletion
-4. "show metrics for [name]" - Display performance metrics
-5. "configure [name]" - Help with configuration changes
-6. "health check [name]" - Show health status of instances
+- "show load balancers" / "list lb"
+- "create load balancer [name]"
+- "delete load balancer [name]"
+- "show metrics for [name]"
+- "configure [name]"
+- "health check [name]"
+Provide helpful and actionable responses.`;
 
-Please provide helpful, specific responses for load balancer management. Be concise and actionable.`;
-    }
-
-    const response = await client.chat.completions.create({
+    const chatResponse = await client.chat.completions.create({
       model: aiModel,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: message }
       ],
-      temperature: aiTemperature,
-      max_tokens: shouldUseJsonMode ? 500 : 1000,
+      temperature: 0.7,
+      max_tokens: 1000
     });
 
-    const aiReply = response.choices[0].message.content;
+    const aiReply = chatResponse.choices[0].message.content;
 
-    // If expecting JSON response, try to execute the action
-    if (shouldUseJsonMode) {
-      try {
-        const actionData = JSON.parse(aiReply);
-        const executionResult = await executeAction(actionData, user.id);
-        
-        return c.json({
-          reply: aiReply,
-          action: actionData,
-          executionResult,
-          isActionExecuted: true
-        });
-      } catch (parseError) {
-        console.error('Failed to parse AI JSON response:', parseError);
-        return c.json({
-          reply: aiReply,
-          error: "AI returned invalid JSON format",
-          isActionExecuted: false
-        });
-      }
-    }
-
-    // Regular chat response
-    return c.json({ 
-      reply: aiReply,
-      isActionExecuted: false
+    return c.json({
+      intent,
+      shouldExecute,
+      actionData,
+      executionResult,
+      reply: shouldExecute ? executionResult?.message || "Action executed." : aiReply
     });
+
   } catch (err) {
     console.error('Chat error:', err);
     return c.json({ error: "Something went wrong" }, 500);
   }
 }
+
 
 // Execute AI-generated actions
 async function executeAction(actionData, userId) {
@@ -299,23 +306,38 @@ async function executeAction(actionData, userId) {
         };
 
       case 'update_loadbalancer':
-        const updateResult = await LoadBalancer.findOneAndUpdate(
-          { owner: userId, name: criteria.name },
-          { $set: parameters },
-          { new: true }
-        );
-        
-        if (updateResult) {
-          return {
-            status: "success",
-            message: `Load balancer "${criteria.name}" updated successfully.`
-          };
-        } else {
-          return {
-            status: "error",
-            message: `Load balancer "${criteria.name}" not found.`
-          };
-        }
+  const updateData = { ...parameters };
+
+  // If renaming, also update slug
+  if (parameters.name) {
+    const newSlug = slugify(parameters.name, { lower: true, strict: true });
+    updateData.slug = newSlug;
+    updateData.endpoint = `${process.env.BASE_URL || 'https://flexilb.onrender.com'}/proxy/${newSlug}`;
+  }
+
+  const updatedLB = await LoadBalancer.findOneAndUpdate(
+    { owner: userId, name: criteria.name },
+    { $set: updateData },
+    { new: true }
+  );
+
+  if (updatedLB) {
+    return {
+      status: "success",
+      message: `Load balancer "${criteria.name}" updated successfully.`,
+      data: {
+        name: updatedLB.name,
+        slug: updatedLB.slug,
+        endpoint: updatedLB.endpoint
+      }
+    };
+  } else {
+    return {
+      status: "error",
+      message: `Load balancer "${criteria.name}" not found.`
+    };
+  }
+
 
       case 'add_instance':
         const instance = {
