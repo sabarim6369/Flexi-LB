@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Copy, RefreshCw, MessageSquare, Plus, Sparkles, Zap, BarChart3, Settings2, Trash2, Edit3 } from "lucide-react";
+import { Send, Bot, User, Copy, RefreshCw, MessageSquare, Plus, Sparkles, Zap, BarChart3, Settings2, Trash2, Edit3, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
 interface Message {
@@ -22,6 +23,13 @@ interface ChatSession {
   messages: Message[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+interface AIParameters {
+  role: string;
+  temperature: number;
+  maxTokens: number;
+  responseFormat: string;
 }
 
 // Predefined prompt suggestions
@@ -123,6 +131,13 @@ export default function Chat() {
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(dummySessions[0]); // Start with new chat
   const [chatSessions, setChatSessions] = useState<ChatSession[]>(dummySessions);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [aiParameters, setAiParameters] = useState<AIParameters>({
+    role: "assistant",
+    temperature: 0.7,
+    maxTokens: 1000,
+    responseFormat: "text"
+  });
+  const [selectedModel, setSelectedModel] = useState("assistant-0.7-1000-text");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
@@ -559,6 +574,49 @@ export default function Chat() {
         <div className="border-t border-border/50 bg-background/80 backdrop-blur-md">
           <div className="max-w-4xl mx-auto p-6">
             <div className="relative">
+              {/* AI Model Selector */}
+              <div className="mb-4">
+                <Select 
+                  value={selectedModel}
+                  onValueChange={(value) => {
+                    setSelectedModel(value);
+                    const [role, temp, tokens, format] = value.split('-');
+                    setAiParameters({
+                      role,
+                      temperature: parseFloat(temp),
+                      maxTokens: parseInt(tokens),
+                      responseFormat: format
+                    });
+                  }}
+                >
+                  <SelectTrigger className="w-[280px] bg-background/90 border-border/50 rounded-lg hover:bg-background/95 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-primary rounded-full"></div>
+                      <SelectValue />
+                    </div>
+                    <ChevronDown className="h-4 w-4 opacity-50" />
+                  </SelectTrigger>
+                  <SelectContent className="w-[280px]">
+                    <SelectItem value="assistant-0.7-1000-text" className="flex flex-col items-start p-3">
+                      <div className="font-medium">FlexiLB Assistant</div>
+                      <div className="text-xs text-muted-foreground">For load balancer management</div>
+                    </SelectItem>
+                    <SelectItem value="assistant-0.9-1500-text" className="flex flex-col items-start p-3">
+                      <div className="font-medium">Verbose Explainer</div>
+                      <div className="text-xs text-muted-foreground">Longer explanations</div>
+                    </SelectItem>
+                    <SelectItem value="system-0.3-800-json" className="flex flex-col items-start p-3">
+                      <div className="font-medium">JSON Responder</div>
+                      <div className="text-xs text-muted-foreground">Structured output for backend execution</div>
+                    </SelectItem>
+                    <SelectItem value="assistant-0.5-1200-text" className="flex flex-col items-start p-3">
+                      <div className="font-medium">Debug Helper</div>
+                      <div className="text-xs text-muted-foreground">Troubleshooting logs/steps</div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
               <div className="flex gap-4 items-end">
                 <div className="flex-1 relative">
                   <Textarea
