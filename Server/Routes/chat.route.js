@@ -8,9 +8,10 @@ import {
   saveMessage, 
   deleteChatSession 
 } from "../Controllers/chatcontroller.js";
+import { authMiddleware } from "../Middleware/authMiddleware.js";
 
 // Chat completion endpoint
-chatroute.post("/chat", chat);
+chatroute.post("/chat",authMiddleware, chat);
 
 // Session management endpoints
 chatroute.get("/sessions", getChatSessions);

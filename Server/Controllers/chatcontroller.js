@@ -22,7 +22,9 @@ function isLoadBalancerQuery(message) {
 // Helper function to get load balancer data
 async function getLoadBalancerContext(userId) {
   try {
-    const loadBalancers = await LoadBalancer.find({ userId }).select('name algorithm instances metrics createdAt');
+    console.log(userId)
+const loadBalancers = await LoadBalancer.find({ owner: userId });
+    console.log(loadBalancers)
     return loadBalancers.map(lb => ({
       id: lb._id,
       name: lb.name,
@@ -32,39 +34,92 @@ async function getLoadBalancerContext(userId) {
       totalRequests: lb.instances?.reduce((sum, i) => sum + (i.metrics?.requests || 0), 0) || 0,
       createdAt: lb.createdAt
     }));
+
   } catch (error) {
     console.error('Error fetching load balancer context:', error);
     return [];
   }
 }
 
-// Enhanced chat function with load balancer integration
+// Helper function to detect if query needs action execution
+function needsActionExecution(message) {
+  const actionKeywords = [
+    'create', 'delete', 'remove', 'add instance', 'set rate', 'disable rate',
+    'update', 'configure', 'health check'
+  ];
+  
+  return actionKeywords.some(keyword => 
+    message.toLowerCase().includes(keyword.toLowerCase())
+  );
+}
+
+// Enhanced chat function with AI-driven actions
 export async function chat(c) {
   try {
     const body = await c.req.json();
-    const { message, sessionId } = body;
+    const { message, role = "assistant", temperature = 0.7, responseFormat = "text" } = body;
     const user = c.get("user"); // Assuming user is set by auth middleware
 
     if (!user) {
       return c.json({ error: "Authentication required" }, 401);
     }
 
-    let enhancedMessage = message;
-    let contextData = null;
+    let systemPrompt = "";
+    let aiModel = "llama-3.1-8b-instant";
+    let aiTemperature = temperature;
+    
+    // Auto-detect if we need JSON action mode
+    const shouldUseJsonMode = role === "JSON Responder" || responseFormat === "json" || needsActionExecution(message);
 
-    // If it's a load balancer query, add context
-    if (isLoadBalancerQuery(message)) {
+    if (shouldUseJsonMode) {
+     
+      systemPrompt = `You are FlexiLB AI. Convert user queries into JSON actions for load balancer management.
+
+Supported actions:
+- create_loadbalancer: Create new load balancer
+- delete_loadbalancer: Delete existing load balancer  
+- update_loadbalancer: Modify load balancer settings
+- get_status: Get load balancer status/metrics
+- add_instance: Add backend instance to load balancer
+- remove_instance: Remove backend instance
+- health_check: Check health of instances
+- set_ratelimit: Set rate limiting on load balancer
+- remove_ratelimit: Remove rate limiting from load balancer
+- update_ratelimit: Update rate limit settings
+
+Examples:
+- "create lb named myapp" → {"action": "create_loadbalancer", "criteria": {"name": "myapp"}, "parameters": {"algorithm": "round_robin"}}
+- "create loadbalancer mcplb roundrobin algorithm instacecount 1 url http://localhost:8080/chat" → {"action": "create_loadbalancer", "criteria": {"name": "mcplb"}, "parameters": {"algorithm": "round_robin", "instances": [{"url": "http://localhost:8080/chat", "id": "instance1"}]}}
+- "delete lb myapp" → {"action": "delete_loadbalancer", "criteria": {"name": "myapp"}}
+- "set rate limit 100 requests per minute on myapp" → {"action": "set_ratelimit", "criteria": {"name": "myapp"}, "parameters": {"limit": 100, "window": 60}}
+- "add instance http://server1.com to myapp" → {"action": "add_instance", "criteria": {"name": "myapp"}, "parameters": {"instance": {"url": "http://server1.com", "id": "server1"}}}
+- "health check myapp" → {"action": "health_check", "criteria": {"name": "myapp"}}
+- "show load balancers" → {"action": "get_status", "criteria": {}}
+
+Always return valid JSON with this structure:
+{
+  "action": "action_name",
+  "criteria": {
+    "name": "lb-name"
+  },
+  "parameters": {
+    "key": "value"
+  }
+}
+
+Return only JSON, no explanations.`;
+
+      aiTemperature = 0.1; // Low temperature for structured output
+    } else {
+      // Regular chat mode with load balancer context
       const lbData = await getLoadBalancerContext(user.id);
-      contextData = lbData;
-
-      enhancedMessage = `You are FlexiLB Assistant, a specialized AI for load balancer management.
+      
+      systemPrompt = `You are FlexiLB Assistant, a specialized AI for load balancer management.
 
 Current Load Balancers:
 ${lbData.length > 0 ? lbData.map(lb => 
   `- ${lb.name} (${lb.algorithm}): ${lb.healthyInstances}/${lb.instanceCount} healthy instances, ${lb.totalRequests} total requests`
 ).join('\n') : 'No load balancers found.'}
-
-User Query: "${message}"
 
 Available Operations:
 1. "show load balancers" / "list lb" - Display current load balancers
@@ -74,31 +129,328 @@ Available Operations:
 5. "configure [name]" - Help with configuration changes
 6. "health check [name]" - Show health status of instances
 
-Please provide helpful, specific responses for load balancer management. If the user wants to perform an action, provide step-by-step instructions or direct them to the appropriate page in the FlexiLB interface.
-
-Response Guidelines:
-- Be concise and actionable
-- Include specific load balancer names when relevant
-- Suggest next steps when appropriate
-- If data is needed, format it clearly
-- Always be helpful and professional`;
+Please provide helpful, specific responses for load balancer management. Be concise and actionable.`;
     }
 
     const response = await client.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      messages: [{ role: "user", content: enhancedMessage }],
-      temperature: 0.7,
-      max_tokens: 1000,
+      model: aiModel,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: message }
+      ],
+      temperature: aiTemperature,
+      max_tokens: shouldUseJsonMode ? 500 : 1000,
     });
 
+    const aiReply = response.choices[0].message.content;
+
+    // If expecting JSON response, try to execute the action
+    if (shouldUseJsonMode) {
+      try {
+        const actionData = JSON.parse(aiReply);
+        const executionResult = await executeAction(actionData, user.id);
+        
+        return c.json({
+          reply: aiReply,
+          action: actionData,
+          executionResult,
+          isActionExecuted: true
+        });
+      } catch (parseError) {
+        console.error('Failed to parse AI JSON response:', parseError);
+        return c.json({
+          reply: aiReply,
+          error: "AI returned invalid JSON format",
+          isActionExecuted: false
+        });
+      }
+    }
+
+    // Regular chat response
     return c.json({ 
-      reply: response.choices[0].message.content,
-      context: contextData,
-      isLoadBalancerQuery: isLoadBalancerQuery(message)
+      reply: aiReply,
+      isActionExecuted: false
     });
   } catch (err) {
     console.error('Chat error:', err);
     return c.json({ error: "Something went wrong" }, 500);
+  }
+}
+
+// Execute AI-generated actions
+async function executeAction(actionData, userId) {
+  try {
+    const { action, criteria, parameters } = actionData;
+
+    switch (action) {
+      case 'delete_loadbalancer':
+        const deleteResult = await LoadBalancer.findOneAndDelete({
+          owner: userId,
+          name: criteria.name
+        });
+        
+        if (deleteResult) {
+          return {
+            status: "success",
+            message: `Load balancer "${criteria.name}" deleted successfully.`
+          };
+        } else {
+          return {
+            status: "error",
+            message: `Load balancer "${criteria.name}" not found.`
+          };
+        }
+
+      case 'create_loadbalancer':
+        // Check if LB with same name already exists
+        const existingLB = await LoadBalancer.findOne({
+          owner: userId,
+          name: criteria.name
+        });
+        
+        if (existingLB) {
+          return {
+            status: "error",
+            message: `Load balancer "${criteria.name}" already exists.`
+          };
+        }
+
+        const newLB = new LoadBalancer({
+          owner: userId,
+          name: criteria.name,
+          endpoint: `${criteria.name.toLowerCase().replace(/\s+/g, '-')}.flexilb.local`,
+          slug: `${criteria.name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
+          algorithm: parameters?.algorithm || 'round_robin',
+          instances: parameters?.instances || [],
+          rateLimiterOn: parameters?.rateLimiterOn || false,
+          rateLimiter: {
+            limit: parameters?.rateLimit || 100,
+            window: parameters?.rateWindow || 60
+          }
+        });
+        
+        const savedLB = await newLB.save();
+        return {
+          status: "success",
+          message: `Load balancer "${criteria.name}" created successfully.`,
+          data: {
+            name: savedLB.name,
+            endpoint: savedLB.endpoint,
+            algorithm: savedLB.algorithm
+          }
+        };
+
+      case 'get_status':
+        const loadBalancers = criteria.name 
+          ? await LoadBalancer.find({ owner: userId, name: criteria.name })
+          : await LoadBalancer.find({ owner: userId });
+        
+        if (loadBalancers.length === 0) {
+          return {
+            status: "success",
+            message: criteria.name ? `Load balancer "${criteria.name}" not found.` : "No load balancers found.",
+            data: []
+          };
+        }
+
+        const lbStatus = loadBalancers.map(lb => ({
+          name: lb.name,
+          algorithm: lb.algorithm,
+          instances: lb.instances.length,
+          healthy: lb.instances.filter(i => i.isHealthy).length,
+          endpoint: lb.endpoint,
+          rateLimit: lb.rateLimiterOn ? `${lb.rateLimiter.limit}/${lb.rateLimiter.window}s` : 'Off'
+        }));
+
+        return {
+          status: "success",
+          message: `Found ${loadBalancers.length} load balancer(s).`,
+          data: lbStatus
+        };
+
+      case 'update_loadbalancer':
+        const updateResult = await LoadBalancer.findOneAndUpdate(
+          { owner: userId, name: criteria.name },
+          { $set: parameters },
+          { new: true }
+        );
+        
+        if (updateResult) {
+          return {
+            status: "success",
+            message: `Load balancer "${criteria.name}" updated successfully.`
+          };
+        } else {
+          return {
+            status: "error",
+            message: `Load balancer "${criteria.name}" not found.`
+          };
+        }
+
+      case 'add_instance':
+        const instance = {
+          id: parameters.instance.id || `instance-${Date.now()}`,
+          url: parameters.instance.url,
+          instancename: parameters.instance.name || parameters.instance.url,
+          isHealthy: true,
+          healthStatus: "healthy",
+          weight: parameters.instance.weight || 1,
+          metrics: {
+            requests: 0,
+            failures: 0,
+            totalLatencyMs: 0,
+            lastLatency: 0,
+            hourlyRequests: {}
+          }
+        };
+
+        const addResult = await LoadBalancer.findOneAndUpdate(
+          { owner: userId, name: criteria.name },
+          { $push: { instances: instance } },
+          { new: true }
+        );
+        
+        if (addResult) {
+          return {
+            status: "success",
+            message: `Instance "${instance.url}" added to "${criteria.name}".`
+          };
+        } else {
+          return {
+            status: "error",
+            message: `Load balancer "${criteria.name}" not found.`
+          };
+        }
+
+      case 'remove_instance':
+        const removeResult = await LoadBalancer.findOneAndUpdate(
+          { owner: userId, name: criteria.name },
+          { $pull: { instances: { url: criteria.instanceUrl || parameters.url } } },
+          { new: true }
+        );
+        
+        if (removeResult) {
+          return {
+            status: "success",
+            message: `Instance removed from "${criteria.name}".`
+          };
+        } else {
+          return {
+            status: "error",
+            message: `Load balancer "${criteria.name}" not found.`
+          };
+        }
+
+      case 'set_ratelimit':
+        const rateLimitResult = await LoadBalancer.findOneAndUpdate(
+          { owner: userId, name: criteria.name },
+          { 
+            $set: { 
+              rateLimiterOn: true,
+              'rateLimiter.limit': parameters.limit || 100,
+              'rateLimiter.window': parameters.window || 60
+            }
+          },
+          { new: true }
+        );
+        
+        if (rateLimitResult) {
+          return {
+            status: "success",
+            message: `Rate limit set to ${parameters.limit || 100} requests per ${parameters.window || 60} seconds on "${criteria.name}".`
+          };
+        } else {
+          return {
+            status: "error",
+            message: `Load balancer "${criteria.name}" not found.`
+          };
+        }
+
+      case 'remove_ratelimit':
+        const removeRateLimitResult = await LoadBalancer.findOneAndUpdate(
+          { owner: userId, name: criteria.name },
+          { $set: { rateLimiterOn: false } },
+          { new: true }
+        );
+        
+        if (removeRateLimitResult) {
+          return {
+            status: "success",
+            message: `Rate limiting disabled on "${criteria.name}".`
+          };
+        } else {
+          return {
+            status: "error",
+            message: `Load balancer "${criteria.name}" not found.`
+          };
+        }
+
+      case 'update_ratelimit':
+        const updateRateLimitResult = await LoadBalancer.findOneAndUpdate(
+          { owner: userId, name: criteria.name },
+          { 
+            $set: { 
+              'rateLimiter.limit': parameters.limit,
+              'rateLimiter.window': parameters.window
+            }
+          },
+          { new: true }
+        );
+        
+        if (updateRateLimitResult) {
+          return {
+            status: "success",
+            message: `Rate limit updated to ${parameters.limit} requests per ${parameters.window} seconds on "${criteria.name}".`
+          };
+        } else {
+          return {
+            status: "error",
+            message: `Load balancer "${criteria.name}" not found.`
+          };
+        }
+
+      case 'health_check':
+        const healthLB = await LoadBalancer.findOne({ owner: userId, name: criteria.name });
+        if (healthLB) {
+          const totalInstances = healthLB.instances.length;
+          const healthyInstances = healthLB.instances.filter(i => i.isHealthy).length;
+          const unhealthyInstances = totalInstances - healthyInstances;
+          
+          let healthMessage = `Health check for "${criteria.name}": ${healthyInstances}/${totalInstances} instances healthy.`;
+          if (unhealthyInstances > 0) {
+            healthMessage += ` ${unhealthyInstances} instance(s) need attention.`;
+          }
+          
+          return {
+            status: "success",
+            message: healthMessage,
+            data: {
+              name: healthLB.name,
+              totalInstances,
+              healthyInstances,
+              unhealthyInstances
+            }
+          };
+        } else {
+          return {
+            status: "error",
+            message: `Load balancer "${criteria.name}" not found.`
+          };
+        }
+
+      default:
+        return {
+          status: "error",
+          message: `Unsupported action: ${action}`
+        };
+    }
+  } catch (error) {
+    console.error('Action execution error:', error);
+    return {
+      status: "error",
+      message: "Failed to execute action",
+      details: error.message
+    };
   }
 }
 
