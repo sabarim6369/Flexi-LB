@@ -112,6 +112,46 @@ function parseDirectCommand(message, lbData) {
     }
   }
 
+  // Update/Edit instance URL commands - multiple patterns
+  let editInstanceMatch = msg.match(/^(edit|change|update)\s+(the\s+)?(instance\s+url|url)\s+of\s+(.+?)\s+from\s+(.+?)\s+to\s+(.+)$/i);
+  
+  // Alternative pattern: "edit the instacne url of X from Y to Z"
+  if (!editInstanceMatch) {
+    editInstanceMatch = msg.match(/^(edit|change|update)\s+(the\s+)?instacne\s+url\s+of\s+(.+?)\s+from\s+(.+?)\s+to\s+(.+)$/i);
+    if (editInstanceMatch) {
+      // Adjust the indices since this pattern is slightly different
+      editInstanceMatch = [editInstanceMatch[0], editInstanceMatch[1], editInstanceMatch[2], 'instance url', editInstanceMatch[3], editInstanceMatch[4], editInstanceMatch[5]];
+    }
+  }
+  
+  if (editInstanceMatch) {
+    const lbName = editInstanceMatch[4].trim();
+    let oldUrl = editInstanceMatch[5].trim();
+    let newUrl = editInstanceMatch[6].trim();
+    
+    // Add protocol if missing
+    if (!newUrl.startsWith('http://') && !newUrl.startsWith('https://')) {
+      newUrl = 'http://' + newUrl;
+    }
+    
+    console.log("🔍 Edit instance URL command detected:");
+    console.log("  LB name:", lbName);
+    console.log("  Old URL:", oldUrl);
+    console.log("  New URL:", newUrl);
+    
+    const exactMatch = lbData.find(lb => lb.name.toLowerCase() === lbName.toLowerCase());
+    if (exactMatch) {
+      console.log("✅ Load balancer found:", exactMatch.name);
+      return { 
+        action: "update_instance", 
+        criteria: { name: exactMatch.name, oldUrl: oldUrl }, 
+        parameters: { newUrl: newUrl } 
+      };
+    } else {
+      console.log("❌ Load balancer not found");
+    }
+  }
+
   // Update/Edit name commands - improved pattern matching
   const editMatch = msg.match(/^(edit|change|update|rename)\s+(the\s+)?name\s+of\s+(.+)\s+to\s+(.+)$/i);
   if (editMatch) {
@@ -221,6 +261,7 @@ function needsClarification(message, lbData) {
       options: lbNames.flatMap(name => [
         `edit name of ${name} to newname`,
         `update algorithm of ${name} to least_conn`,
+        `edit instance url of ${name} from oldurl to newurl`,
         `add instance http://server.com to ${name}`,
         `set rate limit 100 requests per minute on ${name}`
       ])
@@ -622,6 +663,39 @@ async function executeAction(actionData, userId) {
           return {
             status: "error",
             message: `Load balancer "${criteria.name}" not found.`
+          };
+        }
+
+      case 'update_instance':
+        const updateInstanceResult = await LoadBalancer.findOneAndUpdate(
+          { 
+            owner: userId, 
+            name: criteria.name,
+            "instances.url": criteria.oldUrl 
+          },
+          { 
+            $set: { 
+              "instances.$.url": parameters.newUrl,
+              "instances.$.instancename": parameters.newUrl
+            }
+          },
+          { new: true }
+        );
+        
+        if (updateInstanceResult) {
+          return {
+            status: "success",
+            message: `Instance URL updated from "${criteria.oldUrl}" to "${parameters.newUrl}" in "${criteria.name}".`,
+            data: {
+              loadBalancer: criteria.name,
+              oldUrl: criteria.oldUrl,
+              newUrl: parameters.newUrl
+            }
+          };
+        } else {
+          return {
+            status: "error",
+            message: `Load balancer "${criteria.name}" or instance with URL "${criteria.oldUrl}" not found.`
           };
         }
 
