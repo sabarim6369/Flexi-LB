@@ -13,6 +13,7 @@ import LoadBalancerDetail from "./pages/LoadBalancerDetail";
 import LoadBalancerMetrics from "./pages/LoadBalancerMetrics";
 import Settings from "./pages/Settings";
 import Ratelimiter from "./pages/Ratelimiter";
+import Chat from "./pages/Chat";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./Utils/Protectedroute";
 import AuthRoute from "./Utils/AuthRoute";
@@ -35,6 +36,7 @@ const App = () => (
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/metrics" element={<ProtectedRoute><Metrics /></ProtectedRoute>} />
             <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
+            <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
             <Route path="/lb/:id" element={<ProtectedRoute><LoadBalancerDetail /></ProtectedRoute>} />
             <Route path="/lb/:id/edit" element={<ProtectedRoute><LoadBalancerDetail /></ProtectedRoute>} />
             <Route path="/lb/:id/metrics" element={<ProtectedRoute><LoadBalancerMetrics /></ProtectedRoute>} />
