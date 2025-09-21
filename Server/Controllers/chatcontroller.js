@@ -90,25 +90,121 @@ function parseDirectCommand(message, lbData) {
   const msg = message.toLowerCase().trim();
   const lbNames = lbData.map(lb => lb.name.toLowerCase());
 
-  // Check for multi-line create load balancer command
+  // Enhanced natural language parsing for load balancer creation
+  const lines = message.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+  
+  // Check if this looks like a natural load balancer specification
+  const hasLBName = /(?:my\s+)?(?:load\s*balancer\s+name\s+is|loadbalancer\s+name\s+is|name\s*[:=]?)\s*(\w+)/i.test(message);
+  const hasAlgorithm = /(roundrobin|round\s*robin|least\s*conn|random)/i.test(message);
+  const hasUrl = /url\s*[:=]?\s*(https?:\/\/\S+|\S+:\d+\S*)/i.test(message);
+  const hasInstanceCount = /instance\s*count?\s*[:=]?\s*(\d+)/i.test(message);
+  const hasCreateIntent = /(create?|make|build|setup|add)(?!\s+load\s*balancer)/i.test(message);
+  
+  // If it has name, URL and some creation intent, treat as load balancer creation
+  if (hasLBName && hasUrl && (hasCreateIntent || hasAlgorithm || hasInstanceCount)) {
+    console.log("🎯 Detected natural load balancer creation request");
+    
+    const lb = { action: "create_loadbalancer", criteria: {}, parameters: { instances: [] } };
+    
+    // Extract name
+    const nameMatch = message.match(/(?:my\s+)?(?:load\s*balancer\s+name\s+is|loadbalancer\s+name\s+is|name\s*[:=]?)\s*(\w+)/i);
+    if (nameMatch) {
+      lb.criteria.name = nameMatch[1].trim();
+    }
+    
+    // Extract algorithm
+    const algoMatch = message.match(/(roundrobin|round\s*robin|least\s*conn|random)/i);
+    if (algoMatch) {
+      const algo = algoMatch[1].toLowerCase().replace(/\s+/g, '');
+      lb.parameters.algorithm = algo === 'roundrobin' ? 'round_robin' : 
+                                algo === 'leastconn' ? 'least_conn' : 
+                                algo === 'random' ? 'random' : 'round_robin';
+    }
+    
+    // Extract URL
+    const urlMatch = message.match(/url\s*[:=]?\s*(https?:\/\/\S+|\S+:\d+\S*)/i);
+    let instanceUrl = null;
+    if (urlMatch) {
+      instanceUrl = urlMatch[1];
+      // Add protocol if missing
+      if (!instanceUrl.startsWith('http://') && !instanceUrl.startsWith('https://')) {
+        instanceUrl = 'http://' + instanceUrl;
+      }
+    }
+    
+    // Extract instance count
+    const countMatch = message.match(/instance\s*count?\s*[:=]?\s*(\d+)/i);
+    const instanceCount = countMatch ? parseInt(countMatch[1], 10) : 1;
+    
+    // Create instances array
+    if (instanceUrl && instanceCount > 0) {
+      lb.parameters.instances = Array(instanceCount)
+        .fill(0)
+        .map((_, i) => ({ 
+          url: instanceUrl, 
+          name: `instance${i + 1}`,
+          weight: 1
+        }));
+    }
+    
+    console.log("🚀 Parsed natural command:", JSON.stringify(lb, null, 2));
+    return lb;
+  }
+
+  // Check for multi-line create load balancer command (existing logic)
   if (/create.*load\s*balancer|loadbalc?er\s*name\s*[:=]/i.test(message)) {
     const parsed = parseLoadBalancerCommand(message);
     console.log("🚀 Parsed create command:", JSON.stringify(parsed, null, 2));
     return parsed;
   }
 
-  // Show/List commands
+  // Show/List commands with specific load balancer
   if (/^(show|list|get)\s*(load\s*balancers?|lbs?)$/i.test(msg)) {
     return { action: "get_status", criteria: {}, parameters: {} };
   }
+  
+  // Enhanced: Show specific load balancer status/instances
+  const showMatch = msg.match(/^(show|list|get|what\s+are)\s+(?:the\s+)?(?:available\s+)?(?:instances?|status)\s+(?:of\s+)?(?:the\s+)?(.+?)(?:\s+load\s*balancer)?$/i);
+  if (showMatch) {
+    const lbName = showMatch[2].trim();
+    console.log("📊 Status/instances command detected for:", lbName);
+    const exactMatch = lbData.find(lb => lb.name.toLowerCase() === lbName.toLowerCase());
+    if (exactMatch) {
+      console.log("✅ Load balancer found for status:", exactMatch.name);
+      return { action: "get_status", criteria: { name: exactMatch.name }, parameters: { detailed: true } };
+    } else {
+      console.log("❌ Load balancer not found for status:", lbName);
+    }
+  }
 
-  // Delete commands
-  const deleteMatch = msg.match(/^(delete|remove)\s*(load\s*balancer|lb)\s+(.+)$/i);
+  // Enhanced Delete commands - multiple patterns
+  let deleteMatch = msg.match(/^(delete|remove)\s*(load\s*balancer|lb)\s+(.+)$/i);
+  
+  // Pattern: "delete lb named finallbbb"
+  if (!deleteMatch) {
+    deleteMatch = msg.match(/^(delete|remove)\s*(load\s*balancer|lb)\s+(named|called)\s+(.+)$/i);
+    if (deleteMatch) {
+      deleteMatch[3] = deleteMatch[4]; // Move the name to index 3 for consistency
+    }
+  }
+  
+  // Pattern: "delete finallbbb" (when message contains lb/loadbalancer keywords)
+  if (!deleteMatch && /(load\s*balancer|lb)/i.test(msg)) {
+    deleteMatch = msg.match(/^(delete|remove)\s+(.+)$/i);
+    if (deleteMatch) {
+      deleteMatch[3] = deleteMatch[2]; // Move the name to index 3 for consistency
+    }
+  }
+  
   if (deleteMatch) {
     const lbName = deleteMatch[3].trim();
-    const exactMatch = lbData.find(lb => lb.name.toLowerCase() === lbName);
+    console.log("🗑️ Delete command detected for:", lbName);
+    const exactMatch = lbData.find(lb => lb.name.toLowerCase() === lbName.toLowerCase());
     if (exactMatch) {
+      console.log("✅ Load balancer found for deletion:", exactMatch.name);
       return { action: "delete_loadbalancer", criteria: { name: exactMatch.name }, parameters: {} };
+    } else {
+      console.log("❌ Load balancer not found:", lbName);
     }
   }
 
@@ -334,10 +430,45 @@ function needsClarification(message, lbData) {
 export async function chat(c) {
   try {
     const body = await c.req.json();
-    const { message, role = "assistant", temperature = 0.7, responseFormat = "text" } = body;
+    const { message, sessionId, role = "assistant", temperature = 0.7, responseFormat = "text" } = body;
     const user = c.get("user");
 
     if (!user) return c.json({ error: "Authentication required" }, 401);
+
+    // Get or create chat session
+    let session = null;
+    if (sessionId) {
+      session = await ChatSession.findOne({ 
+        _id: sessionId, 
+        userId: user.id, 
+        isActive: true 
+      });
+      if (!session) {
+        return c.json({ error: "Chat session not found" }, 404);
+      }
+    } else {
+      // Create new session with intelligent title
+      const title = message.length > 50 ? message.slice(0, 47) + "..." : message;
+      session = new ChatSession({
+        userId: user.id,
+        title,
+        messages: []
+      });
+      await session.save();
+    }
+
+    // Save user message to session
+    const userMessageId = `msg-${Date.now()}-user`;
+    const userMessage = {
+      id: userMessageId,
+      content: message,
+      role: "user",
+      timestamp: new Date(),
+      type: "text",
+      data: null
+    };
+    session.messages.push(userMessage);
+    await session.save();
 
     const lbData = await getLoadBalancerContext(user.id);
     
@@ -349,22 +480,62 @@ export async function chat(c) {
       console.log("🎯 Executing direct action...");
       const executionResult = await executeAction(directAction, user.id);
       console.log("✅ Execution result:", JSON.stringify(executionResult, null, 2));
+      
+      // Save assistant response to session
+      const assistantMessageId = `msg-${Date.now()}-assistant`;
+      const assistantMessage = {
+        id: assistantMessageId,
+        content: executionResult.message,
+        role: "assistant",
+        timestamp: new Date(),
+        type: "loadbalancer",
+        data: {
+          action: directAction.action,
+          executionResult,
+          actionData: directAction
+        }
+      };
+      session.messages.push(assistantMessage);
+      session.updatedAt = new Date();
+      await session.save();
+      
       return c.json({
         reply: executionResult.message,
         executionResult,
         isActionExecuted: true,
-        actionData: directAction
+        actionData: directAction,
+        sessionId: session._id,
+        messageId: assistantMessageId
       });
     }
 
     // Step 2: Check if it's a vague command that needs clarification
     const clarificationNeeded = needsClarification(message, lbData);
     if (clarificationNeeded) {
+      // Save clarification response to session
+      const assistantMessageId = `msg-${Date.now()}-assistant`;
+      const assistantMessage = {
+        id: assistantMessageId,
+        content: clarificationNeeded.message,
+        role: "assistant",
+        timestamp: new Date(),
+        type: "text",
+        data: {
+          needsClarification: true,
+          suggestions: clarificationNeeded.options
+        }
+      };
+      session.messages.push(assistantMessage);
+      session.updatedAt = new Date();
+      await session.save();
+      
       return c.json({
         reply: clarificationNeeded.message,
         suggestions: clarificationNeeded.options,
         isActionExecuted: false,
-        needsClarification: true
+        needsClarification: true,
+        sessionId: session._id,
+        messageId: assistantMessageId
       });
     }
 
@@ -400,24 +571,92 @@ User: """${message}"""`;
       const actionData = JSON.parse(aiReply);
       if (actionData.action && actionData.criteria !== undefined && actionData.parameters !== undefined) {
         const executionResult = await executeAction(actionData, user.id);
+        
+        // Save assistant response with action execution to session
+        const assistantMessageId = `msg-${Date.now()}-assistant`;
+        const assistantMessage = {
+          id: assistantMessageId,
+          content: executionResult.message,
+          role: "assistant",
+          timestamp: new Date(),
+          type: "loadbalancer",
+          data: {
+            action: actionData.action,
+            executionResult,
+            actionData,
+            aiResponse: aiReply
+          }
+        };
+        session.messages.push(assistantMessage);
+        session.updatedAt = new Date();
+        await session.save();
+        
         return c.json({
           reply: executionResult.message,
           executionResult,
           isActionExecuted: true,
-          actionData
+          actionData,
+          sessionId: session._id,
+          messageId: assistantMessageId
         });
       }
     } catch (parseError) {
       // Not JSON, treat as regular response
     }
 
+    // Save regular AI response to session
+    const assistantMessageId = `msg-${Date.now()}-assistant`;
+    const assistantMessage = {
+      id: assistantMessageId,
+      content: aiReply,
+      role: "assistant",
+      timestamp: new Date(),
+      type: "text",
+      data: null
+    };
+    session.messages.push(assistantMessage);
+    session.updatedAt = new Date();
+    await session.save();
+
     return c.json({
       reply: aiReply,
-      isActionExecuted: false
+      isActionExecuted: false,
+      sessionId: session._id,
+      messageId: assistantMessageId
     });
 
   } catch (err) {
     console.error('Chat error:', err);
+    
+    // Try to save error message to session if session exists
+    if (session) {
+      try {
+        const assistantMessageId = `msg-${Date.now()}-assistant`;
+        const errorMessage = {
+          id: assistantMessageId,
+          content: "I'm sorry, something went wrong while processing your request. Please try again.",
+          role: "assistant",
+          timestamp: new Date(),
+          type: "error",
+          data: {
+            error: err.message,
+            timestamp: new Date()
+          }
+        };
+        session.messages.push(errorMessage);
+        session.updatedAt = new Date();
+        await session.save();
+        
+        return c.json({ 
+          error: "Something went wrong",
+          sessionId: session._id,
+          messageId: assistantMessageId
+        }, 500);
+      } catch (saveError) {
+        console.error('Error saving error message:', saveError);
+      }
+    }
+    
     return c.json({ error: "Something went wrong" }, 500);
   }
 }
@@ -516,30 +755,55 @@ async function executeAction(actionData, userId) {
         };
 
       case 'get_status':
-        const loadBalancers = criteria.name 
-          ? await LoadBalancer.find({ owner: userId, name: criteria.name })
+        // Handle both criteria.name and criteria.load_balancer (for AI compatibility)
+        const targetName = criteria.name || criteria.load_balancer;
+        const loadBalancers = targetName 
+          ? await LoadBalancer.find({ owner: userId, name: targetName })
           : await LoadBalancer.find({ owner: userId });
         
         if (loadBalancers.length === 0) {
           return {
             status: "success",
-            message: criteria.name ? `Load balancer "${criteria.name}" not found.` : "No load balancers found.",
+            message: targetName ? `Load balancer "${targetName}" not found.` : "No load balancers found.",
             data: []
           };
         }
 
-        const lbStatus = loadBalancers.map(lb => ({
-          name: lb.name,
-          algorithm: lb.algorithm,
-          instances: lb.instances.length,
-          healthy: lb.instances.filter(i => i.isHealthy).length,
-          endpoint: lb.endpoint,
-          rateLimit: lb.rateLimiterOn ? `${lb.rateLimiter.limit}/${lb.rateLimiter.window}s` : 'Off'
-        }));
+        // Check if detailed instance information is requested
+        const showDetailedInstances = parameters?.detailed || parameters?.fields?.includes('instances');
+        
+        const lbStatus = loadBalancers.map(lb => {
+          const baseInfo = {
+            name: lb.name,
+            algorithm: lb.algorithm,
+            instances: lb.instances.length,
+            healthy: lb.instances.filter(i => i.isHealthy).length,
+            endpoint: lb.endpoint,
+            rateLimit: lb.rateLimiterOn ? `${lb.rateLimiter.limit}/${lb.rateLimiter.window}s` : 'Off'
+          };
+          
+          // Add detailed instance information if requested
+          if (showDetailedInstances) {
+            baseInfo.instanceDetails = lb.instances.map(inst => ({
+              id: inst.id,
+              name: inst.instancename || inst.url,
+              url: inst.url,
+              isHealthy: inst.isHealthy,
+              healthStatus: inst.healthStatus || 'unknown',
+              weight: inst.weight || 1,
+              requests: inst.metrics?.requests || 0,
+              failures: inst.metrics?.failures || 0,
+              lastLatency: inst.metrics?.lastLatency || 0
+            }));
+          }
+          
+          return baseInfo;
+        });
 
+        const isDetailed = showDetailedInstances ? ' (detailed)' : '';
         return {
           status: "success",
-          message: `Found ${loadBalancers.length} load balancer(s).`,
+          message: `Found ${loadBalancers.length} load balancer(s)${isDetailed}.`,
           data: lbStatus
         };
 
@@ -816,20 +1080,53 @@ async function executeAction(actionData, userId) {
 export async function getChatSessions(c) {
   try {
     const user = c.get("user");
+    const { page = 1, limit = 20 } = c.req.query();
     
     if (!user) {
       return c.json({ error: "Authentication required" }, 401);
     }
 
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const totalSessions = await ChatSession.countDocuments({ 
+      userId: user.id, 
+      isActive: true 
+    });
+
     const sessions = await ChatSession.find({ 
       userId: user.id, 
       isActive: true 
     })
-    .select('_id title createdAt updatedAt')
+    .select('_id title createdAt updatedAt messages')
     .sort({ updatedAt: -1 })
-    .limit(50);
+    .skip(skip)
+    .limit(parseInt(limit));
 
-    return c.json({ sessions });
+    // Add metadata to each session
+    const sessionsWithMetadata = sessions.map(session => ({
+      _id: session._id,
+      title: session.title,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+      messageCount: session.messages?.length || 0,
+      lastMessage: session.messages && session.messages.length > 0 ? 
+        {
+          content: session.messages[session.messages.length - 1].content.slice(0, 100),
+          role: session.messages[session.messages.length - 1].role,
+          timestamp: session.messages[session.messages.length - 1].timestamp
+        } : null,
+      hasLoadBalancerActions: session.messages?.some(msg => msg.type === 'loadbalancer') || false
+    }));
+
+    return c.json({ 
+      sessions: sessionsWithMetadata,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: totalSessions,
+        totalPages: Math.ceil(totalSessions / parseInt(limit)),
+        hasMore: skip + parseInt(limit) < totalSessions
+      }
+    });
   } catch (error) {
     console.error('Error fetching chat sessions:', error);
     return c.json({ error: "Failed to fetch chat sessions" }, 500);
@@ -841,6 +1138,7 @@ export async function getChatSession(c) {
   try {
     const user = c.get("user");
     const { sessionId } = c.req.param();
+    const { page = 1, limit = 50 } = c.req.query();
     
     if (!user) {
       return c.json({ error: "Authentication required" }, 401);
@@ -856,7 +1154,30 @@ export async function getChatSession(c) {
       return c.json({ error: "Chat session not found" }, 404);
     }
 
-    return c.json({ session });
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const totalMessages = session.messages.length;
+    const messages = session.messages
+      .slice(skip, skip + parseInt(limit))
+      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    return c.json({ 
+      session: {
+        _id: session._id,
+        title: session.title,
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+        isActive: session.isActive
+      },
+      messages,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: totalMessages,
+        totalPages: Math.ceil(totalMessages / parseInt(limit)),
+        hasMore: skip + parseInt(limit) < totalMessages
+      }
+    });
   } catch (error) {
     console.error('Error fetching chat session:', error);
     return c.json({ error: "Failed to fetch chat session" }, 500);
@@ -900,7 +1221,7 @@ export async function createChatSession(c) {
 export async function saveMessage(c) {
   try {
     const user = c.get("user");
-    const { sessionId, message: messageData } = await c.req.json();
+    const { sessionId, message: messageData, messageType = "text", additionalData = null } = await c.req.json();
     
     if (!user) {
       return c.json({ error: "Authentication required" }, 401);
@@ -916,20 +1237,161 @@ export async function saveMessage(c) {
       return c.json({ error: "Chat session not found" }, 404);
     }
 
-    session.messages.push(messageData);
+    // Ensure message has required structure
+    const messageToSave = {
+      id: messageData.id || `msg-${Date.now()}-${messageData.role || 'user'}`,
+      content: messageData.content || messageData.message || "",
+      role: messageData.role || "user",
+      timestamp: messageData.timestamp || new Date(),
+      type: messageType,
+      data: additionalData || messageData.data || null
+    };
+
+    session.messages.push(messageToSave);
     session.updatedAt = new Date();
     
-    // Update title if it's the first message and it's from user
-    if (session.messages.length === 1 && messageData.role === 'user') {
-      session.title = messageData.content.slice(0, 50);
+    // Update title if it's the first user message
+    if (session.messages.length === 1 && messageToSave.role === 'user') {
+      session.title = messageToSave.content.length > 50 ? 
+        messageToSave.content.slice(0, 47) + "..." : 
+        messageToSave.content;
     }
 
     await session.save();
 
-    return c.json({ success: true, session });
+    return c.json({ 
+      success: true, 
+      session: {
+        _id: session._id,
+        title: session.title,
+        updatedAt: session.updatedAt,
+        messageCount: session.messages.length
+      },
+      savedMessage: messageToSave
+    });
   } catch (error) {
     console.error('Error saving message:', error);
     return c.json({ error: "Failed to save message" }, 500);
+  }
+}
+
+// Search through chat sessions and messages
+export async function searchChatHistory(c) {
+  try {
+    const user = c.get("user");
+    const { query, sessionId, messageType, page = 1, limit = 20 } = c.req.query();
+    
+    if (!user) {
+      return c.json({ error: "Authentication required" }, 401);
+    }
+
+    if (!query || query.trim().length === 0) {
+      return c.json({ error: "Search query is required" }, 400);
+    }
+
+    const searchRegex = new RegExp(query.trim(), 'i');
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Build search filter
+    const searchFilter = {
+      userId: user.id,
+      isActive: true,
+      'messages.content': searchRegex
+    };
+
+    if (sessionId) {
+      searchFilter._id = sessionId;
+    }
+
+    if (messageType) {
+      searchFilter['messages.type'] = messageType;
+    }
+
+    const sessions = await ChatSession.find(searchFilter)
+      .select('_id title createdAt updatedAt messages')
+      .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Filter and format results
+    const searchResults = [];
+    sessions.forEach(session => {
+      const matchingMessages = session.messages.filter(msg => 
+        searchRegex.test(msg.content) && 
+        (!messageType || msg.type === messageType)
+      );
+
+      if (matchingMessages.length > 0) {
+        searchResults.push({
+          sessionId: session._id,
+          sessionTitle: session.title,
+          sessionCreatedAt: session.createdAt,
+          sessionUpdatedAt: session.updatedAt,
+          matches: matchingMessages.map(msg => ({
+            messageId: msg.id,
+            content: msg.content,
+            role: msg.role,
+            type: msg.type,
+            timestamp: msg.timestamp,
+            // Highlight the matching text
+            preview: msg.content.length > 150 ? 
+              msg.content.slice(0, 147) + "..." : 
+              msg.content
+          }))
+        });
+      }
+    });
+
+    return c.json({ 
+      searchResults,
+      query: query.trim(),
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: searchResults.length
+      }
+    });
+  } catch (error) {
+    console.error('Error searching chat history:', error);
+    return c.json({ error: "Failed to search chat history" }, 500);
+  }
+}
+
+// Update chat session title
+export async function updateChatSession(c) {
+  try {
+    const user = c.get("user");
+    const { sessionId } = c.req.param();
+    const { title } = await c.req.json();
+    
+    if (!user) {
+      return c.json({ error: "Authentication required" }, 401);
+    }
+
+    if (!title || title.trim().length === 0) {
+      return c.json({ error: "Title is required" }, 400);
+    }
+
+    const session = await ChatSession.findOneAndUpdate(
+      { _id: sessionId, userId: user.id, isActive: true },
+      { 
+        title: title.trim(),
+        updatedAt: new Date()
+      },
+      { new: true }
+    ).select('_id title updatedAt');
+
+    if (!session) {
+      return c.json({ error: "Chat session not found" }, 404);
+    }
+
+    return c.json({ 
+      success: true,
+      session
+    });
+  } catch (error) {
+    console.error('Error updating chat session:', error);
+    return c.json({ error: "Failed to update chat session" }, 500);
   }
 }
 

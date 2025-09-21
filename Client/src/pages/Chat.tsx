@@ -1,31 +1,21 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Copy, RefreshCw, MessageSquare, Plus, Sparkles, Zap, BarChart3, Settings2, Trash2, Edit3, ChevronDown } from "lucide-react";
+import { Send, Bot, User, Copy, RefreshCw, MessageSquare, Plus, Sparkles, Zap, BarChart3, Settings2, Trash2, Edit3, ChevronDown, Search, X, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import axiosInstance from "@/Utils/axiosInstance";
-import { apiurl } from "./../api";
-
-interface Message {
-  id: string;
-  content: string;
-  role: "user" | "assistant";
-  timestamp: Date;
-  type?: "text" | "loadbalancer" | "code" | "error";
-  data?: any;
-}
-
-interface ChatSession {
-  id: string;
-  title: string;
-  messages: Message[];
-  createdAt: Date;
-  updatedAt: Date;
-}
+import { 
+  chatAPI, 
+  ChatSession, 
+  Message, 
+  ChatResponse, 
+  SearchResult,
+  PaginationInfo 
+} from "@/services/chatAPI";
 
 interface AIParameters {
   role: string;
@@ -62,77 +52,30 @@ const promptSuggestions = [
   }
 ];
 
-// Dummy data for demonstration - starting with empty new chat
+// Dummy data for demonstration - will be replaced with API calls
 const dummySessions: ChatSession[] = [
   {
-    id: "new",
+    _id: "new",
     title: "New Chat",
     messages: [],
     createdAt: new Date(),
     updatedAt: new Date()
-  },
-  {
-    id: "1",
-    title: "Load Balancer Setup Help",
-    messages: [
-      {
-        id: "1",
-        content: "How do I create a new load balancer?",
-        role: "user",
-        timestamp: new Date(Date.now() - 1000 * 60 * 5),
-        type: "text"
-      },
-      {
-        id: "2",
-        content: "I'll help you create a new load balancer! Here's how you can do it:\n\n1. **Navigate to Dashboard**: Go to your FlexiLB dashboard\n2. **Click 'Create Load Balancer'**: Look for the create button\n3. **Configure Settings**:\n   - Name: Choose a descriptive name\n   - Algorithm: Select from Round Robin, Least Connections, or Random\n   - Instances: Add your backend servers\n\n4. **Set Health Checks**: Configure health check intervals\n5. **Deploy**: Click create to deploy your load balancer\n\nWould you like me to guide you through any specific step?",
-        role: "assistant",
-        timestamp: new Date(Date.now() - 1000 * 60 * 4),
-        type: "loadbalancer"
-      }
-    ],
-    createdAt: new Date(Date.now() - 1000 * 60 * 60),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 4)
-  },
-  {
-    id: "2",
-    title: "Performance Metrics Analysis",
-    messages: [
-      {
-        id: "3",
-        content: "Show me the current load balancer performance",
-        role: "user",
-        timestamp: new Date(Date.now() - 1000 * 60 * 30),
-        type: "text"
-      },
-      {
-        id: "4",
-        content: "Here's your current load balancer performance overview:\n\n**Active Load Balancers**: 3\n\n📊 **MyApp-LB** (Round Robin)\n- Status: ✅ Healthy\n- Instances: 4/4 healthy\n- Requests/min: 1,247\n- Avg Response: 45ms\n\n📊 **API-Gateway** (Least Connections)\n- Status: ✅ Healthy  \n- Instances: 3/3 healthy\n- Requests/min: 892\n- Avg Response: 38ms\n\n📊 **Static-Assets** (Random)\n- Status: ⚠️ Degraded\n- Instances: 2/3 healthy\n- Requests/min: 2,156\n- Avg Response: 120ms\n\nWould you like detailed metrics for any specific load balancer?",
-        role: "assistant",
-        timestamp: new Date(Date.now() - 1000 * 60 * 29),
-        type: "loadbalancer"
-      }
-    ],
-    createdAt: new Date(Date.now() - 1000 * 60 * 120),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 29)
   }
-];
-
-const dummyResponses = [
-  "I can help you with load balancer management! What would you like to know?",
-  "Based on your current setup, I recommend using Round Robin algorithm for balanced distribution.",
-  "Your load balancers are performing well. The average response time is 52ms across all instances.",
-  "I can guide you through creating a new load balancer. Would you like to start with the configuration?",
-  "Let me check your current load balancer status... All systems are operational!",
-  "For better performance, consider adding more instances to your Static-Assets load balancer.",
-  "I notice one of your instances is unhealthy. Would you like me to help troubleshoot this issue?"
 ];
 
 export default function Chat() {
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [currentSession, setCurrentSession] = useState<ChatSession | null>(dummySessions[0]); // Start with new chat
-  const [chatSessions, setChatSessions] = useState<ChatSession[]>(dummySessions);
+  const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
   const [aiParameters, setAiParameters] = useState<AIParameters>({
     role: "assistant",
     temperature: 0.7,
@@ -143,6 +86,79 @@ export default function Chat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
+
+  // Load chat sessions on component mount
+  useEffect(() => {
+    loadChatSessions();
+  }, []);
+
+  // Load chat sessions from API
+  const loadChatSessions = async () => {
+    try {
+      setSessionsLoading(true);
+      const { sessions } = await chatAPI.getChatSessions(1, 20);
+      
+      // Format sessions to include proper types
+      const formattedSessions = sessions.map(session => ({
+        ...session,
+        createdAt: new Date(session.createdAt),
+        updatedAt: new Date(session.updatedAt),
+        messages: session.messages || []
+      }));
+
+      setChatSessions(formattedSessions);
+      
+      // If no current session and we have sessions, select the first one
+      if (!currentSession && formattedSessions.length > 0) {
+        await loadSessionMessages(formattedSessions[0]._id);
+      } else if (formattedSessions.length === 0) {
+        // Create a new session if none exist
+        await createNewSession();
+      }
+    } catch (error) {
+      console.error('Error loading chat sessions:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load chat sessions",
+        variant: "destructive",
+      });
+      // Create a new session as fallback
+      await createNewSession();
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  // Load messages for a specific session
+  const loadSessionMessages = async (sessionId: string) => {
+    try {
+      const { session, messages } = await chatAPI.getChatSession(sessionId, 1, 50);
+      
+      const formattedSession: ChatSession = {
+        ...session,
+        messages: messages.map(msg => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        })),
+        createdAt: new Date(session.createdAt),
+        updatedAt: new Date(session.updatedAt)
+      };
+
+      setCurrentSession(formattedSession);
+      
+      // Update the session in the sessions list
+      setChatSessions(prev => 
+        prev.map(s => s._id === sessionId ? formattedSession : s)
+      );
+    } catch (error) {
+      console.error('Error loading session messages:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load session messages",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Get display name for selected model
   const getModelDisplayName = (modelValue: string) => {
@@ -172,16 +188,155 @@ export default function Chat() {
   }, [currentSession]);
 
   // Create new chat session
-  const createNewSession = () => {
-    const newSession: ChatSession = {
-      id: Date.now().toString(),
-      title: "New Chat",
-      messages: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    setChatSessions(prev => [newSession, ...prev]);
-    setCurrentSession(newSession);
+  const createNewSession = async () => {
+    try {
+      const { session } = await chatAPI.createChatSession("New Chat");
+      const formattedSession: ChatSession = {
+        ...session,
+        messages: [],
+        createdAt: new Date(session.createdAt),
+        updatedAt: new Date(session.updatedAt)
+      };
+      
+      setChatSessions(prev => [formattedSession, ...prev]);
+      setCurrentSession(formattedSession);
+      
+      toast({
+        title: "New Chat",
+        description: "Created new chat session",
+      });
+    } catch (error) {
+      console.error('Error creating new session:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create new chat session",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Delete a chat session
+  const deleteSession = async (sessionId: string) => {
+    try {
+      await chatAPI.deleteChatSession(sessionId);
+      
+      setChatSessions(prev => prev.filter(s => s._id !== sessionId));
+      
+      // If deleting current session, select another or create new
+      if (currentSession?._id === sessionId) {
+        const remainingSessions = chatSessions.filter(s => s._id !== sessionId);
+        if (remainingSessions.length > 0) {
+          await loadSessionMessages(remainingSessions[0]._id);
+        } else {
+          await createNewSession();
+        }
+      }
+      
+      toast({
+        title: "Session Deleted",
+        description: "Chat session has been deleted",
+      });
+    } catch (error) {
+      console.error('Error deleting session:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete chat session",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Search through chat history
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    
+    try {
+      setIsSearching(true);
+      const { searchResults } = await chatAPI.searchChatHistory(searchQuery.trim(), {
+        page: 1,
+        limit: 20
+      });
+      setSearchResults(searchResults);
+    } catch (error) {
+      console.error('Error searching chat history:', error);
+      toast({
+        title: "Search Error",
+        description: "Failed to search chat history",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Start editing a session title
+  const startEditingSession = (sessionId: string, currentTitle: string) => {
+    setEditingSessionId(sessionId);
+    setEditingTitle(currentTitle);
+  };
+
+  // Save edited session title
+  const saveSessionTitle = async (sessionId: string) => {
+    if (!editingTitle.trim()) {
+      toast({
+        title: "Error",
+        description: "Session title cannot be empty",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await chatAPI.updateChatSession(sessionId, editingTitle.trim());
+      
+      // Update local state
+      setChatSessions(prev => 
+        prev.map(session => 
+          session._id === sessionId 
+            ? { ...session, title: editingTitle.trim(), updatedAt: new Date() }
+            : session
+        )
+      );
+
+      // Update current session if it's the one being edited
+      if (currentSession?._id === sessionId) {
+        setCurrentSession(prev => 
+          prev ? { ...prev, title: editingTitle.trim(), updatedAt: new Date() } : null
+        );
+      }
+
+      setEditingSessionId(null);
+      setEditingTitle("");
+      
+      toast({
+        title: "Success",
+        description: "Session title updated successfully",
+      });
+    } catch (error) {
+      console.error('Error updating session title:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update session title",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Cancel editing session title
+  const cancelEditingSession = () => {
+    setEditingSessionId(null);
+    setEditingTitle("");
+  };
+
+  // Handle Enter key in edit input
+  const handleEditKeyPress = (e: React.KeyboardEvent, sessionId: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveSessionTitle(sessionId);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEditingSession();
+    }
   };
 
   // Handle suggestion click
@@ -194,28 +349,53 @@ export default function Chat() {
 
   // Handle sending messages with real API call
   const handleSendMessage = async () => {
-    if (!message.trim() || isLoading || !currentSession) return;
+    if (!message.trim() || isLoading) return;
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: `msg-${Date.now()}-user`,
       content: message.trim(),
       role: "user",
       timestamp: new Date(),
       type: "text",
     };
 
-    // Add user message to current session
-    const updatedSession = {
-      ...currentSession,
-      messages: [...currentSession.messages, userMessage],
+    let sessionToUse = currentSession;
+    
+    // If no current session, create a new one
+    if (!sessionToUse) {
+      try {
+        const { session } = await chatAPI.createChatSession("New Chat");
+        sessionToUse = {
+          ...session,
+          messages: [],
+          createdAt: new Date(session.createdAt),
+          updatedAt: new Date(session.updatedAt)
+        };
+        setCurrentSession(sessionToUse);
+        setChatSessions(prev => [sessionToUse!, ...prev]);
+      } catch (error) {
+        console.error('Error creating session:', error);
+        toast({
+          title: "Error",
+          description: "Failed to create chat session",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    // Update UI optimistically
+    const optimisticSession = {
+      ...sessionToUse,
+      messages: [...(sessionToUse.messages || []), userMessage],
       updatedAt: new Date(),
-      title: currentSession.messages.length === 0 ? message.trim().slice(0, 30) : currentSession.title,
+      title: sessionToUse.messages?.length === 0 ? message.trim().slice(0, 30) : sessionToUse.title,
     };
 
-    setCurrentSession(updatedSession);
+    setCurrentSession(optimisticSession);
     setChatSessions(prev => 
       prev.map(session => 
-        session.id === currentSession.id ? updatedSession : session
+        session._id === sessionToUse!._id ? optimisticSession : session
       )
     );
 
@@ -224,37 +404,38 @@ export default function Chat() {
     setIsLoading(true);
 
     try {
-      // Prepare API request with AI parameters
-      const requestData = {
-        message: userQuery,
-        role: getModelDisplayName(selectedModel),
-        temperature: aiParameters.temperature,
-        responseFormat: aiParameters.responseFormat
-      };
+      // Send message using the API
+      const response: ChatResponse = await chatAPI.sendMessage(
+        userQuery,
+        sessionToUse._id,
+        {
+          role: getModelDisplayName(selectedModel),
+          temperature: aiParameters.temperature,
+          responseFormat: aiParameters.responseFormat
+        }
+      );
 
-      // Call the chat API
-      const response = await axiosInstance.post(`${apiurl}/api/chat`, requestData);
-      const { reply, action, executionResult, isActionExecuted } = response.data;
+      const { reply, sessionId, messageId, isActionExecuted, executionResult, needsClarification, suggestions } = response;
 
       let assistantContent = reply;
-      let messageType = "text";
+      let messageType: "text" | "loadbalancer" | "error" = "text";
 
-      // Handle action execution results
-      if (isActionExecuted && executionResult) {
+      // Handle different response types
+      if (needsClarification && suggestions) {
+        assistantContent = `${reply}\n\n**Suggestions:**\n${suggestions.map(s => `• ${s}`).join('\n')}`;
+      } else if (isActionExecuted && executionResult) {
         if (executionResult.status === "success") {
-          assistantContent = `✅ **Action Completed Successfully**\n\n${executionResult.message}\n\n**Details:**\n${reply}`;
+          assistantContent = `✅ **Action Completed Successfully**\n\n${executionResult.message}`;
           messageType = "loadbalancer";
           
-          // Show success toast
           toast({
             title: "Action Executed",
             description: executionResult.message,
           });
         } else {
-          assistantContent = `❌ **Action Failed**\n\n${executionResult.message}\n\n**AI Response:**\n${reply}`;
+          assistantContent = `❌ **Action Failed**\n\n${executionResult.message}`;
           messageType = "error";
           
-          // Show error toast
           toast({
             title: "Action Failed",
             description: executionResult.message,
@@ -264,34 +445,44 @@ export default function Chat() {
       }
 
       const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: messageId,
         content: assistantContent,
         role: "assistant",
         timestamp: new Date(),
         type: messageType,
-        data: action && executionResult ? { action, executionResult } : undefined
+        data: response.executionResult ? { 
+          executionResult: response.executionResult,
+          actionData: response.actionData 
+        } : needsClarification ? {
+          needsClarification: true,
+          suggestions: suggestions
+        } : undefined
       };
 
-      // Add assistant response to session
+      // Update session with assistant response
       const finalSession = {
-        ...updatedSession,
-        messages: [...updatedSession.messages, assistantMessage],
+        ...optimisticSession,
+        _id: sessionId, // Use the sessionId from response
+        messages: [...optimisticSession.messages!, assistantMessage],
         updatedAt: new Date(),
       };
 
       setCurrentSession(finalSession);
       setChatSessions(prev => 
         prev.map(session => 
-          session.id === currentSession.id ? finalSession : session
+          session._id === sessionId ? finalSession : session
         )
       );
+
+      // Reload sessions to get updated metadata
+      await loadChatSessions();
 
     } catch (error) {
       console.error('Chat API error:', error);
       
       // Add error message
       const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: `msg-${Date.now()}-error`,
         content: "Sorry, I'm having trouble connecting to the server. Please try again later.",
         role: "assistant",
         timestamp: new Date(),
@@ -299,15 +490,15 @@ export default function Chat() {
       };
 
       const errorSession = {
-        ...updatedSession,
-        messages: [...updatedSession.messages, errorMessage],
+        ...optimisticSession,
+        messages: [...optimisticSession.messages!, errorMessage],
         updatedAt: new Date(),
       };
 
       setCurrentSession(errorSession);
       setChatSessions(prev => 
         prev.map(session => 
-          session.id === currentSession.id ? errorSession : session
+          session._id === sessionToUse!._id ? errorSession : session
         )
       );
 
@@ -340,14 +531,6 @@ export default function Chat() {
 
   // Format message content for different types
   const formatMessageContent = (message: Message) => {
-    if (message.type === "code") {
-      return (
-        <pre className="bg-muted p-3 rounded-md overflow-x-auto text-sm">
-          <code>{message.content}</code>
-        </pre>
-      );
-    }
-    
     return (
       <div className="prose prose-sm max-w-none dark:prose-invert">
         {message.content.split('\n').map((line, index) => (
@@ -376,7 +559,56 @@ export default function Chat() {
                   <p className="text-xs text-muted-foreground">AI-Powered Management</p>
                 </div>
               </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => setShowSearch(!showSearch)}
+              >
+                <Search className="h-4 w-4" />
+              </Button>
             </div>
+            
+            {/* Search Bar */}
+            {showSearch && (
+              <div className="mb-4 space-y-2">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Search chat history..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                    className="text-sm"
+                  />
+                  <Button 
+                    size="sm" 
+                    onClick={handleSearch}
+                    disabled={isSearching || !searchQuery.trim()}
+                  >
+                    {isSearching ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {searchResults.length > 0 && (
+                  <div className="max-h-32 overflow-y-auto border rounded-md p-2 bg-muted/50">
+                    {searchResults.map((result, index) => (
+                      <div
+                        key={index}
+                        className="text-xs p-2 hover:bg-background rounded cursor-pointer"
+                        onClick={() => {
+                          loadSessionMessages(result.sessionId);
+                          setShowSearch(false);
+                          setSearchResults([]);
+                          setSearchQuery("");
+                        }}
+                      >
+                        <div className="font-medium truncate">{result.sessionTitle}</div>
+                        <div className="text-muted-foreground truncate">{result.matches[0]?.preview}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             
             <Button
               onClick={createNewSession}
@@ -391,41 +623,138 @@ export default function Chat() {
           {/* Chat Sessions */}
           <ScrollArea className="flex-1 p-4">
             <div className="space-y-2">
-              {chatSessions.map((session) => (
-                <div
-                  key={session.id}
-                  className={`group relative rounded-xl p-3 cursor-pointer transition-all duration-200 hover:bg-muted/50 ${
-                    currentSession?.id === session.id 
-                      ? 'bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 shadow-sm' 
-                      : 'hover:shadow-sm'
-                  }`}
-                  onClick={() => setCurrentSession(session)}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate mb-1 text-foreground">
-                        {session.title}
-                      </div>
-                      <div className="text-xs text-muted-foreground mb-1">
-                        {session.messages.length} messages
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {session.updatedAt.toLocaleDateString()} • {session.updatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    </div>
-                    {session.id !== 'new' && (
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                          <Edit3 className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive">
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+              {sessionsLoading ? (
+                <div className="text-center py-8">
+                  <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">Loading sessions...</p>
                 </div>
-              ))}
+              ) : chatSessions.length === 0 ? (
+                <div className="text-center py-8">
+                  <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground mb-4">No chat sessions yet</p>
+                  <Button onClick={createNewSession} size="sm">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Start New Chat
+                  </Button>
+                </div>
+              ) : (
+                chatSessions.map((session) => (
+                  <div
+                    key={session._id}
+                    className={`group relative rounded-xl p-3 cursor-pointer transition-all duration-200 hover:bg-muted/50 ${
+                      currentSession?._id === session._id 
+                        ? 'bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 shadow-sm' 
+                        : 'hover:shadow-sm'
+                    }`}
+                    onClick={() => editingSessionId !== session._id && loadSessionMessages(session._id)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        {editingSessionId === session._id ? (
+                          // Edit mode
+                          <div className="mb-2">
+                            <Input
+                              value={editingTitle}
+                              onChange={(e) => setEditingTitle(e.target.value)}
+                              onKeyDown={(e) => handleEditKeyPress(e, session._id)}
+                              className="text-sm h-8 mb-1"
+                              placeholder="Enter session title..."
+                              autoFocus
+                              onBlur={() => {
+                                // Save on blur if there's content
+                                if (editingTitle.trim()) {
+                                  saveSessionTitle(session._id);
+                                } else {
+                                  cancelEditingSession();
+                                }
+                              }}
+                            />
+                            <div className="text-xs text-muted-foreground">
+                              Press Enter to save • Esc to cancel
+                            </div>
+                          </div>
+                        ) : (
+                          // Display mode
+                          <div className="text-sm font-medium truncate mb-1 text-foreground">
+                            {session.title}
+                          </div>
+                        )}
+                        
+                        <div className="text-xs text-muted-foreground mb-1">
+                          {session.messageCount || session.messages?.length || 0} messages
+                          {session.hasLoadBalancerActions && (
+                            <Badge variant="secondary" className="ml-2 text-xs">
+                              LB Actions
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {session.updatedAt.toLocaleDateString()} • {session.updatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                        {session.lastMessage && editingSessionId !== session._id && (
+                          <div className="text-xs text-muted-foreground mt-1 truncate">
+                            {session.lastMessage.content.slice(0, 50)}...
+                          </div>
+                        )}
+                      </div>
+                      
+                      {editingSessionId === session._id ? (
+                        // Edit mode buttons
+                        <div className="flex gap-1 ml-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-6 w-6 p-0 text-green-600 hover:text-green-700"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              saveSessionTitle(session._id);
+                            }}
+                          >
+                            <Check className="h-3 w-3" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-6 w-6 p-0 text-gray-500 hover:text-gray-600"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              cancelEditingSession();
+                            }}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        // Normal mode buttons
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-6 w-6 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startEditingSession(session._id, session.title);
+                            }}
+                          >
+                            <Edit3 className="h-3 w-3" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteSession(session._id);
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </ScrollArea>
         </div>
@@ -470,7 +799,7 @@ export default function Chat() {
         {/* Enhanced Messages Area */}
         <ScrollArea className="flex-1">
           <div className="max-w-4xl mx-auto p-6 space-y-8">
-            {currentSession?.messages.length === 0 ? (
+            {(!currentSession || !currentSession.messages || currentSession.messages.length === 0) ? (
               /* Enhanced Welcome Screen */
               <div className="text-center py-12">
                 <div className="mb-8">
@@ -545,7 +874,7 @@ export default function Chat() {
               </div>
             ) : (
               /* Enhanced Message Display */
-              currentSession?.messages.map((msg) => (
+              (currentSession?.messages || []).map((msg) => (
                 <div
                   key={msg.id}
                   className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}

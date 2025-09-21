@@ -25,7 +25,7 @@ app.use("*", async (c, next) => {
 require("./Services/EmailService.js")
 app.route("/auth", authRoutes);
 app.route("/lbs", lbRoutes);
-app.route("/api",chatroute);
+app.route("/api/chat", chatroute);
 app.all("/proxy/:slug/*", proxyRequest);
 app.all("/proxy/:slug", proxyRequest);
 
