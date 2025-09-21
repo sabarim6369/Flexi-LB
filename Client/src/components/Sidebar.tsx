@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Server, Activity, AlertCircle, Globe, Settings } from "lucide-react";
+import { Plus, Server, Activity, AlertCircle, Globe, Settings, MessageSquare } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 export function Sidebar() {
@@ -13,8 +13,8 @@ export function Sidebar() {
     { name: "Dashboard", icon: Activity, path: "/dashboard" },
     { name: "Metrics", icon: Globe, path: "/metrics" },
     { name: "Alerts", icon: AlertCircle, path: "/alerts" },
-              { name: "Ratelimiter", icon: Server, path: "/ratelimiter" },
-
+    { name: "Chat Assistant", icon: MessageSquare, path: "/chat" },
+    { name: "Ratelimiter", icon: Server, path: "/ratelimiter" },
     { name: "Settings", icon: Settings, path: "/settings" },
   ];
 
