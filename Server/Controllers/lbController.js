@@ -76,8 +76,8 @@ export async function createLB(c) {
       endpoint: "temp"
     });
 
-    const BASE_URL = process.env.BASE_URL || "https://flexilb.onrender.com";
-        // const BASE_URL = process.env.BASE_URL || "http://localhost:3003";
+    // const BASE_URL = process.env.BASE_URL || "https://flexilb.onrender.com";
+        const BASE_URL = process.env.BASE_URL || "http://localhost:3003";
 
     lb.endpoint = `${BASE_URL}/proxy/${slug}`;
     await lb.save();
@@ -305,7 +305,7 @@ function pickInstance(lb, clientIp) {
   }
 }
 const agentMap = new Map(); 
-const rateLimitStore = new Map(); // global store: key = lb._id + ip
+const rateLimitStore = new Map(); // key = lb._id + clientIp
 
 export async function proxyRequest(c) {
   const slug = c.req.param("slug");
@@ -321,29 +321,29 @@ export async function proxyRequest(c) {
     c.req.header("x-real-ip") ||
     "127.0.0.1";
 
-if (lb.rateLimiterOn) {
-  const limit = lb.rateLimiter.limit;
-  const windowSec = lb.rateLimiter.window;
+  if (lb.rateLimiterOn) {
+    const limit = lb.rateLimiter.limit;   // max requests
+    const windowSec = lb.rateLimiter.window; // time window in seconds
+    const now = Date.now();
+    const key = `${lb._id}:${clientIp}`;
 
-  const now = Date.now();
-  const key = `${lb._id}:${clientIp}`; // unique per load balancer + IP
-  const record = rateLimitStore.get(key) || { count: 0, start: now };
+    // Get request timestamps for this client
+    let timestamps = rateLimitStore.get(key) || [];
 
-  if (now - record.start < windowSec * 1000) {
-    if (record.count >= limit) {
+    // Remove timestamps older than the window
+    const cutoff = now - windowSec * 1000;
+    timestamps = timestamps.filter(ts => ts > cutoff);
+
+    if (timestamps.length >= limit) {
       return c.json({ error: "Rate limit exceeded" }, 429);
-    } else {
-      record.count += 1;
     }
-  } else {
-    record.count = 1;
-    record.start = now;
+
+    // Add this request timestamp
+    timestamps.push(now);
+    rateLimitStore.set(key, timestamps);
   }
 
-  rateLimitStore.set(key, record);
-}
-
-
+  // ----- Normal proxying -----
   const instance = pickInstance(lb, clientIp);
   if (!instance) {
     return c.json({ error: "No healthy instances available" }, 503);
@@ -361,14 +361,16 @@ if (lb.rateLimiterOn) {
   try {
     const targetUrl = `${instance.url}/${path}`;
     const method = c.req.method;
-  const agent = getAgentForUrl(instance.url); 
+    const agent = getAgentForUrl(instance.url);
+
     const response = await axios({
       url: targetUrl,
       method,
-      data: method !== "GET" ? await c.req.json().catch(() => null) : undefined,
+      data:
+        method !== "GET" ? await c.req.json().catch(() => null) : undefined,
       headers: c.req.header(),
       validateStatus: () => true,
-          httpAgent: agent,
+      httpAgent: agent,
       httpsAgent: agent,
     });
 
@@ -392,6 +394,7 @@ if (lb.rateLimiterOn) {
     return c.json({ error: "Proxy request" }, 500);
   }
 }
+
 
 export async function getMetrics(c) {
   const lb = await LoadBalancer.findById(c.req.param("lbId"));
