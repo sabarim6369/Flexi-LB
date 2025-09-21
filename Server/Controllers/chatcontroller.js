@@ -1,6 +1,9 @@
 import Groq from "groq-sdk";
 import LoadBalancer from "../Models/LoadBalancer.js";
 import ChatSession from "../Models/ChatSession.js";
+import slugify from "slugify";
+
+const rrState = new Map();
 
 const client = new Groq({
   apiKey: process.env.GROQ_API_KEY,
@@ -41,7 +44,6 @@ const loadBalancers = await LoadBalancer.find({ owner: userId });
   }
 }
 
-// Helper function to detect if query needs action execution
 function needsActionExecution(message) {
   const actionKeywords = [
     'create', 'delete', 'remove', 'add instance', 'set rate', 'disable rate',
@@ -53,7 +55,6 @@ function needsActionExecution(message) {
   );
 }
 
-// Enhanced chat function with AI-driven actions
 export async function chat(c) {
   try {
     const body = await c.req.json();
@@ -202,6 +203,14 @@ async function executeAction(actionData, userId) {
         }
 
       case 'create_loadbalancer':
+        // Validate input
+        if (!criteria.name || (parameters?.instances && parameters.instances.length === 0)) {
+          return {
+            status: "error",
+            message: "Invalid body: name is required and instances cannot be empty if provided"
+          };
+        }
+
         // Check if LB with same name already exists
         const existingLB = await LoadBalancer.findOne({
           owner: userId,
@@ -215,28 +224,49 @@ async function executeAction(actionData, userId) {
           };
         }
 
-        const newLB = new LoadBalancer({
-          owner: userId,
+        // Generate unique slug
+        const baseSlug = slugify(criteria.name, { lower: true, strict: true });
+        let slug = baseSlug;
+        let counter = 1;
+        while (await LoadBalancer.findOne({ slug })) {
+          slug = `${baseSlug}-${counter++}`;
+        }
+
+        // Prepare instances data
+        const instances = parameters?.instances ? parameters.instances.map((inst, i) => ({
+          id: `inst-${Date.now()}-${i}`,
+          url: inst.url,
+          weight: inst.weight ?? 1,
+          instancename: inst.name || inst.url
+        })) : [];
+
+        // Create load balancer
+        let lb = await LoadBalancer.create({
           name: criteria.name,
-          endpoint: `${criteria.name.toLowerCase().replace(/\s+/g, '-')}.flexilb.local`,
-          slug: `${criteria.name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
+          owner: userId,
+          slug,
           algorithm: parameters?.algorithm || 'round_robin',
-          instances: parameters?.instances || [],
-          rateLimiterOn: parameters?.rateLimiterOn || false,
-          rateLimiter: {
-            limit: parameters?.rateLimit || 100,
-            window: parameters?.rateWindow || 60
-          }
+          instances,
+          endpoint: "temp"
         });
+
+        // Set proper endpoint
+        const BASE_URL = process.env.BASE_URL || "https://flexilb.onrender.com";
+        lb.endpoint = `${BASE_URL}/proxy/${slug}`;
+        await lb.save();
+
+        // Initialize round robin state
+        rrState.set(String(lb._id), 0);
         
-        const savedLB = await newLB.save();
         return {
           status: "success",
           message: `Load balancer "${criteria.name}" created successfully.`,
           data: {
-            name: savedLB.name,
-            endpoint: savedLB.endpoint,
-            algorithm: savedLB.algorithm
+            name: lb.name,
+            endpoint: lb.endpoint,
+            slug: lb.slug,
+            algorithm: lb.algorithm,
+            instances: lb.instances.length
           }
         };
 
