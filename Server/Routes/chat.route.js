@@ -6,18 +6,24 @@ import {
   getChatSession, 
   createChatSession, 
   saveMessage, 
-  deleteChatSession 
+  deleteChatSession,
+  updateChatSession,
+  searchChatHistory
 } from "../Controllers/chatcontroller.js";
 import { authMiddleware } from "../Middleware/authMiddleware.js";
 
 // Chat completion endpoint
-chatroute.post("/chat",authMiddleware, chat);
+chatroute.post("/chat", authMiddleware, chat);
 
 // Session management endpoints
-chatroute.get("/sessions", getChatSessions);
-chatroute.get("/sessions/:sessionId", getChatSession);
-chatroute.post("/sessions", createChatSession);
-chatroute.post("/sessions/message", saveMessage);
-chatroute.delete("/sessions/:sessionId", deleteChatSession);
+chatroute.get("/sessions", authMiddleware, getChatSessions);
+chatroute.get("/sessions/:sessionId", authMiddleware, getChatSession);
+chatroute.post("/sessions", authMiddleware, createChatSession);
+chatroute.put("/sessions/:sessionId", authMiddleware, updateChatSession);
+chatroute.post("/sessions/message", authMiddleware, saveMessage);
+chatroute.delete("/sessions/:sessionId", authMiddleware, deleteChatSession);
+
+// Search endpoint
+chatroute.get("/search", authMiddleware, searchChatHistory);
 
 export default chatroute;
