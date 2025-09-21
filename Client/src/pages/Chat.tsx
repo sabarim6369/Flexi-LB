@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import axiosInstance from "@/Utils/axiosInstance";
+import { apiurl } from "./../api";
 
 interface Message {
   id: string;
@@ -142,6 +144,17 @@ export default function Chat() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
 
+  // Get display name for selected model
+  const getModelDisplayName = (modelValue: string) => {
+    const modelMap = {
+      "assistant-0.7-1000-text": "FlexiLB Assistant",
+      "assistant-0.9-1500-text": "Verbose Explainer", 
+      "system-0.3-800-json": "JSON Responder",
+      "assistant-0.5-1200-text": "Debug Helper"
+    };
+    return modelMap[modelValue] || "FlexiLB Assistant";
+  };
+
   // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -179,7 +192,7 @@ export default function Chat() {
     }
   };
 
-  // Handle sending messages with dummy responses
+  // Handle sending messages with real API call
   const handleSendMessage = async () => {
     if (!message.trim() || isLoading || !currentSession) return;
 
@@ -206,42 +219,57 @@ export default function Chat() {
       )
     );
 
+    const userQuery = message.trim();
     setMessage("");
     setIsLoading(true);
 
-    // Simulate API delay
-    setTimeout(() => {
-      // Check if message is related to load balancers
-      const isLBQuery = message.toLowerCase().includes("load balancer") || 
-                       message.toLowerCase().includes("loadbalancer") || 
-                       message.toLowerCase().includes("create") ||
-                       message.toLowerCase().includes("show") ||
-                       message.toLowerCase().includes("list") ||
-                       message.toLowerCase().includes("performance") ||
-                       message.toLowerCase().includes("metrics");
+    try {
+      // Prepare API request with AI parameters
+      const requestData = {
+        message: userQuery,
+        role: getModelDisplayName(selectedModel),
+        temperature: aiParameters.temperature,
+        responseFormat: aiParameters.responseFormat
+      };
 
-      // Get a random response or a specific one based on content
-      let responseContent;
-      if (isLBQuery) {
-        if (message.toLowerCase().includes("create")) {
-          responseContent = "I'll help you create a new load balancer!\n\n1. **Choose a name**: Pick a descriptive name for your load balancer\n2. **Select algorithm**: Round Robin, Least Connections, or Random\n3. **Add instances**: Configure your backend servers\n4. **Set health checks**: Define health check parameters\n\nWould you like me to guide you through each step?";
-        } else if (message.toLowerCase().includes("show") || message.toLowerCase().includes("list")) {
-          responseContent = "Here are your current load balancers:\n\n🔹 **MyApp-LB** (Round Robin)\n   - 4/4 instances healthy\n   - 1,247 req/min\n\n🔹 **API-Gateway** (Least Connections)\n   - 3/3 instances healthy\n   - 892 req/min\n\n🔹 **Static-Assets** (Random)\n   - 2/3 instances healthy ⚠️\n   - 2,156 req/min\n\nClick on any load balancer name to view detailed metrics.";
-        } else if (message.toLowerCase().includes("performance") || message.toLowerCase().includes("metrics")) {
-          responseContent = "📊 **Performance Overview**\n\n**Overall Health**: 92% (11/12 instances healthy)\n**Total Requests**: 4,295 req/min\n**Average Response Time**: 67ms\n**Uptime**: 99.7%\n\n**Top Performing**:\n✅ API-Gateway: 38ms avg response\n✅ MyApp-LB: 45ms avg response\n\n**Needs Attention**:\n⚠️ Static-Assets: 120ms avg response (1 instance down)\n\nWould you like detailed metrics for any specific load balancer?";
+      // Call the chat API
+      const response = await axiosInstance.post(`${apiurl}/api/chat`, requestData);
+      const { reply, action, executionResult, isActionExecuted } = response.data;
+
+      let assistantContent = reply;
+      let messageType = "text";
+
+      // Handle action execution results
+      if (isActionExecuted && executionResult) {
+        if (executionResult.status === "success") {
+          assistantContent = `✅ **Action Completed Successfully**\n\n${executionResult.message}\n\n**Details:**\n${reply}`;
+          messageType = "loadbalancer";
+          
+          // Show success toast
+          toast({
+            title: "Action Executed",
+            description: executionResult.message,
+          });
         } else {
-          responseContent = dummyResponses[Math.floor(Math.random() * dummyResponses.length)];
+          assistantContent = `❌ **Action Failed**\n\n${executionResult.message}\n\n**AI Response:**\n${reply}`;
+          messageType = "error";
+          
+          // Show error toast
+          toast({
+            title: "Action Failed",
+            description: executionResult.message,
+            variant: "destructive",
+          });
         }
-      } else {
-        responseContent = dummyResponses[Math.floor(Math.random() * dummyResponses.length)];
       }
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: responseContent,
+        content: assistantContent,
         role: "assistant",
         timestamp: new Date(),
-        type: isLBQuery ? "loadbalancer" : "text",
+        type: messageType,
+        data: action && executionResult ? { action, executionResult } : undefined
       };
 
       // Add assistant response to session
@@ -258,8 +286,39 @@ export default function Chat() {
         )
       );
 
+    } catch (error) {
+      console.error('Chat API error:', error);
+      
+      // Add error message
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: "Sorry, I'm having trouble connecting to the server. Please try again later.",
+        role: "assistant",
+        timestamp: new Date(),
+        type: "error",
+      };
+
+      const errorSession = {
+        ...updatedSession,
+        messages: [...updatedSession.messages, errorMessage],
+        updatedAt: new Date(),
+      };
+
+      setCurrentSession(errorSession);
+      setChatSessions(prev => 
+        prev.map(session => 
+          session.id === currentSession.id ? errorSession : session
+        )
+      );
+
+      toast({
+        title: "Connection Error",
+        description: "Failed to send message. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
       setIsLoading(false);
-    }, 1500); // 1.5 second delay to simulate API call
+    }
   };
 
   // Handle enter key
