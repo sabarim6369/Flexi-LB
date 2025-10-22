@@ -310,7 +310,6 @@ const rateLimitStore = new Map(); // key = lb._id + clientIp
 export async function proxyRequest(c) {
   const slug = c.req.param("slug");
   const path = c.req.param("path") || "";
-  // const path = c.req.path.replace(`/proxy/${slug}/`, ""); // everything after slug
 
   const lb = await LoadBalancer.findOne({ slug });
   if (!lb || lb.instances.length === 0) {
@@ -324,8 +323,8 @@ export async function proxyRequest(c) {
 
   // ---- Rate Limiting ----
   if (lb.rateLimiterOn) {
-    const limit = lb.rateLimiter.limit;   // max requests
-    const windowSec = lb.rateLimiter.window; // time window in seconds
+    const limit = lb.rateLimiter.limit;
+    const windowSec = lb.rateLimiter.window;
     const now = Date.now();
     const key = `${lb._id}:${clientIp}`;
 
@@ -351,7 +350,7 @@ export async function proxyRequest(c) {
   instance.metrics.requests = (instance.metrics.requests || 0) + 1;
   instance.metrics.todayRequests = (instance.metrics.todayRequests || 0) + 1;
 
-  const hourKey = `${new Date().toISOString().slice(0, 13)}`;
+  const hourKey = new Date().toISOString().slice(0, 13);
   const prevCount = instance.metrics.hourlyRequests?.get(hourKey) || 0;
   instance.metrics.hourlyRequests.set(hourKey, prevCount + 1);
 
@@ -367,20 +366,27 @@ export async function proxyRequest(c) {
     console.log("targetUrl:", targetUrl);
 
     const method = c.req.method;
+
+    // ---- Clean headers ----
+    const headers = { ...c.req.headers };
+    delete headers.host; // remove host to prevent backend issues
+
     const agent = getAgentForUrl(instance.url);
-    // console.log("agent", agent);
 
     const response = await axios({
       url: targetUrl,
       method,
       data: method !== "GET" ? await c.req.json().catch(() => null) : undefined,
-      headers: c.req.header(),
-      validateStatus: () => true,
-      maxRedirects: 5,  
+      headers,
+      validateStatus: () => true, // allow all status codes
+      maxRedirects: 5,
       httpAgent: agent,
       httpsAgent: agent,
     });
-console.log("Response😕😕😕🤣🤣",response.data)
+
+    console.log("Response status:", response.status);
+    console.log("Response data:", response.data);
+
     return c.newResponse(
       typeof response.data === "object" ? JSON.stringify(response.data) : response.data,
       response.status,
@@ -392,14 +398,13 @@ console.log("Response😕😕😕🤣🤣",response.data)
             : response.headers["content-type"] || "text/plain",
       }
     );
-  } catch (err) {
-    console.error("Proxy error", err.message);
+  } catch (err: any) {
+    console.error("Proxy error:", err.message, err.response?.status, err.response?.data);
     instance.metrics.failures = (instance.metrics.failures || 0) + 1;
     await lb.save();
     return c.json({ error: "Proxy request failed" }, 500);
   }
 }
-
 
 
 export async function getMetrics(c) {
