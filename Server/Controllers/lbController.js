@@ -309,8 +309,8 @@ const rateLimitStore = new Map(); // key = lb._id + clientIp
 
 export async function proxyRequest(c) {
   const slug = c.req.param("slug");
-  // const path = c.req.param("path") || "";
-  const path = c.req.path.replace(`/proxy/${slug}/`, ""); // everything after slug
+  const path = c.req.param("path") || "";
+  // const path = c.req.path.replace(`/proxy/${slug}/`, ""); // everything after slug
 
   const lb = await LoadBalancer.findOne({ slug });
   if (!lb || lb.instances.length === 0) {
@@ -380,7 +380,7 @@ export async function proxyRequest(c) {
       httpAgent: agent,
       httpsAgent: agent,
     });
-console.log(response.data)
+console.log("Response😕😕😕🤣🤣",response.data)
     return c.newResponse(
       typeof response.data === "object" ? JSON.stringify(response.data) : response.data,
       response.status,
