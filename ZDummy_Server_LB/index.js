@@ -13,7 +13,18 @@ app.get("/", (req, res) => {
     time: new Date().toISOString(),
   });
 });
-
+app.get("/status", (req, res) => {
+  res.json({
+message:"Hi.Status is good"
+  })
+})
+app.get("/health", (req, res) => {
+  res.json({
+    status: "OK",
+    message: "Server 2 is healthy",
+    timestamp: new Date().toISOString(),
+  });
+});
 app.listen(PORT, () => {
   console.log(`✅ Server 2 running on http://localhost:${PORT}`);
 });
