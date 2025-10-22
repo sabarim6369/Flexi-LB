@@ -309,7 +309,8 @@ const rateLimitStore = new Map(); // key = lb._id + clientIp
 
 export async function proxyRequest(c) {
   const slug = c.req.param("slug");
-  const path = c.req.param("*") || "";
+  // const path = c.req.param("path") || "";
+  const path = c.req.path.replace(`/proxy/${slug}/`, ""); // everything after slug
 
   const lb = await LoadBalancer.findOne({ slug });
   if (!lb || lb.instances.length === 0) {
@@ -321,16 +322,14 @@ export async function proxyRequest(c) {
     c.req.header("x-real-ip") ||
     "127.0.0.1";
 
+  // ---- Rate Limiting ----
   if (lb.rateLimiterOn) {
     const limit = lb.rateLimiter.limit;   // max requests
     const windowSec = lb.rateLimiter.window; // time window in seconds
     const now = Date.now();
     const key = `${lb._id}:${clientIp}`;
 
-    // Get request timestamps for this client
     let timestamps = rateLimitStore.get(key) || [];
-
-    // Remove timestamps older than the window
     const cutoff = now - windowSec * 1000;
     timestamps = timestamps.filter(ts => ts > cutoff);
 
@@ -338,17 +337,17 @@ export async function proxyRequest(c) {
       return c.json({ error: "Rate limit exceeded" }, 429);
     }
 
-    // Add this request timestamp
     timestamps.push(now);
     rateLimitStore.set(key, timestamps);
   }
 
-  // ----- Normal proxying -----
+  // ---- Pick instance ----
   const instance = pickInstance(lb, clientIp);
   if (!instance) {
     return c.json({ error: "No healthy instances available" }, 503);
   }
 
+  // ---- Metrics ----
   instance.metrics.requests = (instance.metrics.requests || 0) + 1;
   instance.metrics.todayRequests = (instance.metrics.todayRequests || 0) + 1;
 
@@ -359,25 +358,31 @@ export async function proxyRequest(c) {
   await lb.save();
 
   try {
-    const targetUrl = `${instance.url}/${path}`;
+    // ---- Normalize URL ----
+    const baseUrl = instance.url.replace(/\/+$/, "");       // remove trailing slash
+    const cleanPath = path.replace(/^\/+/, "");            // remove leading slash
+    const targetUrl = cleanPath ? `${baseUrl}/${cleanPath}` : baseUrl;
+
+    console.log(`Proxying request to instance: ${instance.url}, path: ${path}`);
+    console.log("targetUrl:", targetUrl);
+
     const method = c.req.method;
     const agent = getAgentForUrl(instance.url);
+    console.log("agent", agent);
 
     const response = await axios({
       url: targetUrl,
       method,
-      data:
-        method !== "GET" ? await c.req.json().catch(() => null) : undefined,
+      data: method !== "GET" ? await c.req.json().catch(() => null) : undefined,
       headers: c.req.header(),
       validateStatus: () => true,
+      maxRedirects: 5,  
       httpAgent: agent,
       httpsAgent: agent,
     });
 
     return c.newResponse(
-      typeof response.data === "object"
-        ? JSON.stringify(response.data)
-        : response.data,
+      typeof response.data === "object" ? JSON.stringify(response.data) : response.data,
       response.status,
       {
         ...response.headers,
@@ -391,9 +396,10 @@ export async function proxyRequest(c) {
     console.error("Proxy error", err.message);
     instance.metrics.failures = (instance.metrics.failures || 0) + 1;
     await lb.save();
-    return c.json({ error: "Proxy request" }, 500);
+    return c.json({ error: "Proxy request failed" }, 500);
   }
 }
+
 
 
 export async function getMetrics(c) {
@@ -777,3 +783,4 @@ export async function listLBsForRateLimiterStatus(c) {
     return c.json({ error: err.message }, 500);
   }
 }
+
