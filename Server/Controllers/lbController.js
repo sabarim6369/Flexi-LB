@@ -76,8 +76,8 @@ export async function createLB(c) {
       endpoint: "temp"
     });
 
-    const BASE_URL = process.env.BASE_URL || "https://flexilb.onrender.com";
-        // const BASE_URL = process.env.BASE_URL || "http://localhost:3003";
+    // const BASE_URL = process.env.BASE_URL || "https://flexilb.onrender.com";
+        const BASE_URL = process.env.BASE_URL || "http://localhost:3003";
 
     lb.endpoint = `${BASE_URL}/proxy/${slug}`;
     await lb.save();
@@ -362,8 +362,10 @@ const path = c.req.param("path") || "";
   try {
     console.log(`Proxying request to instance: ${instance.url}, path: ${path}`);
     const targetUrl = `${instance.url}/${path}`;
+    console.log("targeturl",targetUrl);
     const method = c.req.method;
     const agent = getAgentForUrl(instance.url);
+    console.log("agent", agent);
 
     const response = await axios({
       url: targetUrl,
