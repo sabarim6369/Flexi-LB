@@ -447,7 +447,6 @@ export async function chat(c) {
         return c.json({ error: "Chat session not found" }, 404);
       }
     } else {
-      // Create new session with intelligent title
       const title = message.length > 50 ? message.slice(0, 47) + "..." : message;
       session = new ChatSession({
         userId: user.id,
