@@ -361,7 +361,7 @@ const path = c.req.param("path") || "";
 
   try {
     console.log(`Proxying request to instance: ${instance.url}, path: ${path}`);
-    const targetUrl = `${instance.url}/${path}`;
+const targetUrl = `${instance.url.replace(/\/$/, "")}/${path}`;
     console.log("targeturl",targetUrl);
     const method = c.req.method;
     const agent = getAgentForUrl(instance.url);
