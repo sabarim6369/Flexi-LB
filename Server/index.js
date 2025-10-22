@@ -26,9 +26,8 @@ require("./Services/EmailService.js")
 app.route("/auth", authRoutes);
 app.route("/lbs", lbRoutes);
 app.route("/api/chat", chatroute);
-// app.all("/proxy/:slug/*", proxyRequest);
-// app.all("/proxy/:slug", proxyRequest);
-app.all("/proxy/:slug/:path{.*}?", proxyRequest);
+app.all("/proxy/:slug/*", proxyRequest);
+app.all("/proxy/:slug", proxyRequest);
 
 const PORT = process.env.PORT || 3003;
 const MONGO = process.env.MONGO_URI;
