@@ -398,7 +398,7 @@ export async function proxyRequest(c) {
             : response.headers["content-type"] || "text/plain",
       }
     );
-  } catch (err: any) {
+  } catch (err) {
     console.error("Proxy error:", err.message, err.response?.status, err.response?.data);
     instance.metrics.failures = (instance.metrics.failures || 0) + 1;
     await lb.save();
