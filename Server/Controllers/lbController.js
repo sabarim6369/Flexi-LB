@@ -368,7 +368,7 @@ export async function proxyRequest(c) {
 
     const method = c.req.method;
     const agent = getAgentForUrl(instance.url);
-    console.log("agent", agent);
+    // console.log("agent", agent);
 
     const response = await axios({
       url: targetUrl,
@@ -380,7 +380,7 @@ export async function proxyRequest(c) {
       httpAgent: agent,
       httpsAgent: agent,
     });
-
+console.log(response.data)
     return c.newResponse(
       typeof response.data === "object" ? JSON.stringify(response.data) : response.data,
       response.status,
