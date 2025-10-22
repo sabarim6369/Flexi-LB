@@ -26,8 +26,9 @@ require("./Services/EmailService.js")
 app.route("/auth", authRoutes);
 app.route("/lbs", lbRoutes);
 app.route("/api/chat", chatroute);
-app.all("/proxy/:slug/*", proxyRequest);
-app.all("/proxy/:slug", proxyRequest);
+// app.all("/proxy/:slug/*", proxyRequest);
+// app.all("/proxy/:slug", proxyRequest);
+app.all("/proxy/:slug/:path{.*}?", proxyRequest);
 
 const PORT = process.env.PORT || 3003;
 const MONGO = process.env.MONGO_URI;
@@ -42,7 +43,7 @@ const MONGO = process.env.MONGO_URI;
     console.error("Startup error", err);
   }
 })();
-app.get("/", (c) => c.json({ message: "Welcome to FlexiLB API" }));
+// app.get("/", (c) => c.json({ message: "Welcome to FlexiLB API" }));
 startHealthChecks();
 export default{
   port: PORT,

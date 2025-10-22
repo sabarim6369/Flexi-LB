@@ -308,8 +308,9 @@ const agentMap = new Map();
 const rateLimitStore = new Map(); // key = lb._id + clientIp
 
 export async function proxyRequest(c) {
-  const slug = c.req.param("slug");
-  const path = c.req.param("*") || "";
+ const slug = c.req.param("slug");
+const path = c.req.param("path") || "";
+
 
   const lb = await LoadBalancer.findOne({ slug });
   if (!lb || lb.instances.length === 0) {
@@ -359,6 +360,7 @@ export async function proxyRequest(c) {
   await lb.save();
 
   try {
+    console.log(`Proxying request to instance: ${instance.url}, path: ${path}`);
     const targetUrl = `${instance.url}/${path}`;
     const method = c.req.method;
     const agent = getAgentForUrl(instance.url);
