@@ -380,6 +380,7 @@ export async function proxyRequest(c) {
       httpAgent: agent,
       httpsAgent: agent,
     });
+    console.log("🤣🤣🤣🤣🤣Response",response);
 
     return c.newResponse(
       typeof response.data === "object" ? JSON.stringify(response.data) : response.data,
