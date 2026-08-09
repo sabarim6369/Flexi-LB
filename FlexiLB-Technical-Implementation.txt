@@ -1,0 +1,422 @@
+FlexiLB Technical Implementation
+
+1. Project Purpose
+FlexiLB is a web-based load balancer management platform. It lets a user log in, create and manage load balancers, add and edit backend instances, view metrics, control rate limiting, read alerts, and use an AI chat assistant to perform common operations from natural language.
+
+2. Repository Layout
+The workspace is split into five main parts:
+
+- Client: the React/Vite frontend.
+- Server: the Hono + MongoDB API.
+- RabbitMQ: the email worker that consumes notification jobs.
+- E2E-Testing: Selenium-based browser tests.
+- ZDummy_Server_LB: a lightweight backend used as a sample upstream target.
+
+3. Frontend Architecture
+The frontend lives in Client/src and is built with React, Vite, TypeScript, Tailwind CSS, Zustand, React Router, axios, sonner, Recharts, and a large set of shadcn/ui components.
+
+3.1 Application Boot
+- main.tsx mounts App.
+- App.tsx defines routing, toast providers, and the React Query client.
+- MainLayout.tsx wraps protected pages and renders a floating chat modal on the bottom-right.
+
+3.2 Route Structure
+The client routes are:
+- / : landing page.
+- /login and /signup : authentication screens.
+- /dashboard : main load balancer dashboard.
+- /metrics : overall metrics view.
+- /alerts : alert management view.
+- /chat : full chat workspace.
+- /lb/:id : load balancer detail page.
+- /lb/:id/edit : same detail page in edit mode.
+- /lb/:id/metrics : per-load-balancer metrics page.
+- /settings : user settings.
+- /ratelimiter : rate limiter management.
+
+ProtectedRoute and AuthRoute both validate the token by calling POST /auth/user/check-validity. ProtectedRoute blocks protected pages unless the token is valid. AuthRoute prevents authenticated users from seeing login and signup pages.
+
+3.3 Shared Client Services
+- Client/src/api.js stores the API base URL.
+- Client/src/Utils/axiosInstance.js creates a shared axios client pointing at the API and injects the stored bearer token into every request.
+- Client/src/Utils/token.js is the localStorage token helper.
+- Client/src/Zustand-Store/useLBStore.js stores load balancer state in memory for quick UI updates.
+
+4. Frontend Data Flow
+The dashboard and detail pages read from the API, then normalize the backend shape into a frontend-friendly structure.
+
+4.1 Dashboard Flow
+Dashboard.tsx loads GET /lbs, converts each backend load balancer into display data, and stores the results in Zustand.
+It computes:
+- activeInstances from healthy instance count.
+- totalRequests by summing instance metrics.requests.
+- avgLatency by averaging instance totalLatencyMs.
+
+The create flow posts to POST /lbs, then appends the returned load balancer to local state. Delete calls DELETE /lbs/:id and removes the item from the store.
+
+4.2 Load Balancer Detail Flow
+LoadBalancerDetail.tsx loads GET /lbs/:id and shows the selected load balancer, its instances, and edit controls.
+It supports:
+- editing the load balancer name, endpoint, and algorithm.
+- adding a server instance through POST /lbs/:id/instances.
+- updating a server instance through PUT /lbs/:id/instances.
+- removing a server instance through DELETE /lbs/:id/instances.
+
+4.3 Metrics Flow
+LoadBalancerMetrics.tsx calls two endpoints in parallel:
+- GET /lbs/:id/metrics
+- GET /lbs/:id/hourlyreq
+
+It displays:
+- request totals
+- average latency
+- success and error rate
+- uptime and bandwidth
+- an hourly line chart per instance
+- per-instance health and latency cards
+
+4.4 Chat Flow
+Client/src/services/chatAPI.ts wraps the chat endpoints.
+Chat.tsx uses that service to:
+- load sessions
+- load session messages
+- create new sessions
+- rename sessions
+- delete sessions
+- search chat history
+- send messages to the assistant
+
+The floating ChatModel modal in MainLayout provides a lightweight assistant entrypoint from any protected page.
+
+5. Backend Architecture
+The backend lives in Server and uses Hono as the HTTP framework, MongoDB via Mongoose for persistence, slugify for stable public URLs, axios and native HTTP clients for proxying, Groq for AI chat, bcryptjs for passwords, jsonwebtoken for auth, amqplib for RabbitMQ, and node-cron for background tasks.
+
+5.1 Server Boot
+Server/index.js does the following:
+- configures CORS for the browser client.
+- mounts auth routes at /auth.
+- mounts load balancer routes at /lbs.
+- mounts chat routes at /api/chat.
+- mounts the proxy route at /proxy/:slug/:path*.
+- connects to MongoDB.
+- starts periodic health checks.
+- imports the email service so the RabbitMQ consumer is started.
+
+5.2 Authentication
+Server/Controllers/authController.js handles:
+- signup
+- login
+- get current user by token user id
+- profile editing
+- password change
+- notification settings
+- token validity check
+
+The auth flow is:
+- signup hashes the password with bcrypt and returns a JWT.
+- login compares the password and returns a JWT.
+- the JWT payload is used by authMiddleware to set c.get("user").
+- the frontend stores the token in localStorage.
+
+5.3 Auth Data Model
+Server/Models/User.js stores:
+- username
+- email
+- password
+- notification preferences
+
+6. Load Balancer Data Model
+Server/Models/LoadBalancer.js is the core storage model.
+
+6.1 Top-Level Fields
+- name: human-readable label.
+- owner: user ID.
+- endpoint: public URL exposed to the user.
+- algorithm: routing strategy.
+- instances: backend target list.
+- slug: stable URL slug used in proxy URLs.
+- rateLimiterOn and rateLimiter: optional per-LB rate limit configuration.
+
+6.2 Instance Fields
+Each instance stores:
+- id
+- url
+- instancename
+- isHealthy
+- healthStatus
+- weight
+- metrics
+
+The metrics object tracks:
+- requests
+- failures
+- totalLatencyMs
+- lastLatency
+- hourlyRequests
+
+7. Load Balancer API
+Server/Routes/lb.route.js defines the API surface.
+
+7.1 Main CRUD
+- GET /lbs -> list all load balancers for the logged-in user.
+- POST /lbs -> create a new load balancer.
+- GET /lbs/:lbId -> fetch one load balancer.
+- PUT /lbs/:lbId -> update load balancer metadata.
+- DELETE /lbs/:lbId -> delete a load balancer.
+
+7.2 Instance Management
+- POST /lbs/:lbId/instances -> add one instance.
+- PUT /lbs/:lbId/instances -> update one instance.
+- DELETE /lbs/:lbId/instances -> remove one instance.
+
+7.3 Metrics and Rate Limiting
+- GET /lbs/:id/metrics -> detailed metrics for one LB.
+- GET /lbs/:id/hourlyreq -> hourly request arrays per instance.
+- GET /lbs/data/overallmetrics -> global overview across all LBs.
+- POST /lbs/:id/ratelimit -> enable rate limiting.
+- GET /lbs/:id/ratelimit -> read rate limit config.
+- PUT /lbs/:id/ratelimit -> update rate limit config.
+- DELETE /lbs/:id/ratelimit -> disable rate limiting.
+- GET /lbs/ratelimiter/status -> summarize rate limiter state.
+
+8. Load Balancer Controller Logic
+Server/Controllers/lbController.js is the traffic and state engine.
+
+8.1 Creation
+createLB validates the payload, checks name uniqueness per user, generates a unique slug, creates the document, then sets the public endpoint to /proxy/:slug.
+
+8.2 Selection Algorithm
+The controller keeps round-robin state in memory and chooses a backend using the active algorithm.
+Supported modes in this file are:
+- round_robin
+- least_conn
+- random
+- ip-hash
+- weighted_round_robin
+- least_response_time
+
+Only healthy instances are considered. If no healthy instance exists, the proxy returns an error.
+
+8.3 Proxying Requests
+proxyRequest is the live request path used by the public endpoint.
+The flow is:
+- find the LB by slug.
+- apply optional rate limiting per client IP.
+- pick a healthy instance.
+- increment request metrics.
+- normalize the target URL and request path.
+- reuse a keep-alive HTTP or HTTPS agent.
+- forward the request with axios.
+- return the upstream response to the caller.
+
+If the upstream call fails, the instance failure count is incremented and the proxy returns a 500 response.
+
+8.4 Metrics Aggregation
+getLBMetrics combines instance-level data into a dashboard-ready response:
+- totalRequests
+- requestsToday
+- avgLatency
+- errorRate
+- successRate
+- uptime
+- bandwidth
+- hourlyRequests
+- overall status
+
+getLBHourlyRequests reshapes each instance’s hourly request map into a 24-element array for charting.
+
+getoverallMetrics builds a cross-load-balancer overview containing:
+- totalRequests
+- totalLBs
+- activeLBs
+- avgLatency
+- errorRate
+- uptime
+- active/total instance counts
+
+8.5 Rate Limiting
+The controller stores client timestamps in memory keyed by load balancer and IP address.
+If the count in the current time window exceeds the configured limit, the proxy returns HTTP 429.
+
+9. Health Checks
+Server/Services/Healthcheckservice.js runs a periodic health sweep over all load balancers.
+
+The health checker:
+- sends HTTP requests to each instance URL.
+- measures latency.
+- marks the instance healthy or down.
+- classifies latency as healthy, degraded, or slow.
+- increments failures on errors.
+- saves the updated instance state back to MongoDB.
+
+This is what drives the live status shown in the dashboard and metrics pages.
+
+10. Chat and AI Assistant
+Server/Controllers/chatcontroller.js is the intelligent command layer.
+
+10.1 Chat Session Model
+Server/Models/ChatSession.js stores:
+- userId
+- title
+- messages
+- isActive
+
+Each message stores:
+- id
+- content
+- role
+- timestamp
+- type
+- data
+
+10.2 Chat Request Flow
+The chat endpoint does the following:
+- validates authentication.
+- finds or creates a chat session.
+- stores the user message.
+- loads the user’s current load balancer context.
+- tries to parse a direct command.
+- if direct parsing succeeds, executes the action immediately.
+- if the request is vague, returns a clarification prompt.
+- otherwise sends the prompt to Groq for AI interpretation.
+
+10.3 Direct Command Parsing
+The controller tries to detect command styles such as:
+- create load balancer
+- show status
+- delete load balancer
+- update instance URL
+- rename load balancer
+- set or remove rate limit
+
+This parsing is useful because it avoids AI latency for common structured requests.
+
+10.4 AI Fallback
+If direct parsing fails, the controller sends a system prompt plus current load balancer context to Groq.
+If Groq returns JSON with action, criteria, and parameters, the backend executes that action.
+If not, the response is stored as a normal assistant message.
+
+10.5 Supported Actions
+executeAction handles:
+- create_loadbalancer
+- delete_loadbalancer
+- update_loadbalancer
+- get_status
+- add_instance
+- remove_instance
+- update_instance
+- set_ratelimit
+- remove_ratelimit
+- update_ratelimit
+- health_check
+
+10.6 Chat Session API
+The backend also exposes:
+- GET /api/chat/sessions
+- GET /api/chat/sessions/:sessionId
+- POST /api/chat/sessions
+- PUT /api/chat/sessions/:sessionId
+- POST /api/chat/sessions/message
+- DELETE /api/chat/sessions/:sessionId
+- GET /api/chat/search
+
+These power the history sidebar and search features in the full chat page.
+
+11. Notification Pipeline
+Server/Services/EmailService.js and RabbitMQ/email-service.js work together as an async email system.
+
+11.1 Producer Side
+Server/Utils/rabbitMQ.js opens a RabbitMQ channel, creates the queue, and publishes messages for delivery.
+
+11.2 Consumer Side
+RabbitMQ/email-service.js consumes queue messages and sends email through Nodemailer.
+The templates currently handled are:
+- serverDown
+- performanceAlert
+- weeklyReport
+
+11.3 Health Monitoring Trigger
+The email service contains a cron-based monitor that can scan all load balancers, detect down instances, and enqueue notifications for users who enabled server-down alerts.
+
+12. Shared Supporting Services
+Server/Services/connectionPoolService.js keeps HTTP and HTTPS agents in memory so repeated proxy requests can reuse sockets instead of opening a new connection each time.
+
+Server/Utils/jwt.js signs and verifies JWTs.
+Server/Middleware/authMiddleware.js reads the token, verifies it, and places the user on the request context.
+
+13. Alerts
+Server/Models/Alert.js defines structured alert records.
+It supports:
+- alert types and statuses
+- metadata for instance metrics
+- acknowledge and resolve instance methods
+- a timeAgo virtual field
+- a createSystemAlert helper
+
+The frontend Alerts page currently displays a mostly mock feed but is designed to map to this model.
+
+14. E2E Testing
+E2E-Testing contains Selenium WebDriver tests written with Mocha and Chai.
+
+14.1 Page Objects
+LoginPage.js and SignupPage.js centralize locators and interactions.
+
+14.2 Test Helpers
+TestHelper.js generates unique test users, manages page URLs, retries flaky operations, and captures failure screenshots.
+WebDriverManager.js owns browser startup, navigation, tabs, alerts, and script execution.
+
+14.3 Test Coverage
+The current suites cover:
+- login flows
+- signup flows
+- validation cases
+- button and link behavior
+- form clearing
+
+15. Dummy Upstream Server
+ZDummy_Server_LB/index.js is a simple Express server on port 4002.
+It exposes:
+- GET /
+- GET /status
+- GET /health
+
+This server is useful as a sample backend target for proxy and health-check testing.
+
+16. Environment and Runtime Assumptions
+The project expects these core runtime values:
+- MONGO_URI for MongoDB.
+- JWT_SECRET for auth token signing.
+- GROQ_API_KEY for the AI assistant.
+- BASE_URL for public LB endpoint generation.
+- RABBITMQ_URL and EMAIL_QUEUE for async email delivery.
+- MAIL_USER and MAIL_PASS for SMTP.
+
+The frontend currently points axios at the deployed API URL in Client/src/api.js, while the axios instance also keeps a local base URL for authenticated requests.
+
+17. Important Implementation Notes
+- The project is functional as a full-stack system, but some route and algorithm names are inconsistent across older and newer code paths.
+- The frontend already expects the response shapes returned by the current controllers for dashboards and metrics.
+- The proxy and health-check logic are the critical runtime paths that determine whether traffic is routed successfully.
+
+18. How the Whole System Works Together
+1. A user signs up or logs in.
+2. The client stores the JWT locally.
+3. Protected pages call the API with the token attached.
+4. The dashboard loads load balancers from MongoDB and shows summary stats.
+5. Creating or editing a load balancer writes back to the Server API.
+6. The proxy endpoint forwards live requests to healthy instances using the selected algorithm.
+7. Health checks continuously update instance status and latency.
+8. Metrics pages read the aggregated counters and render charts.
+9. The chat assistant can either directly execute common commands or ask Groq to interpret a more complex request.
+10. Notification jobs can be queued through RabbitMQ and delivered by the email worker.
+
+19. Practical Run Order
+To run the stack locally, the usual order is:
+- start MongoDB.
+- start the Server app.
+- start the Client app.
+- start the RabbitMQ email consumer if email alerts are required.
+- optionally start the dummy upstream server for testing the proxy.
+
+20. Summary
+FlexiLB is a full-stack infrastructure dashboard with four main runtime concerns: authentication, load balancing, observability, and chat-driven control. The React client handles operator workflows, the Hono backend owns data and routing, MongoDB persists the system state, RabbitMQ handles background notifications, and the dummy upstream server provides an easy test target.
