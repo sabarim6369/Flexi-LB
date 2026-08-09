@@ -1,7 +1,14 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
 
+// Suppress all output from dotenv to avoid stdio pollution
+const originalLog = console.log;
+const originalError = console.error;
+console.log = () => {};
+console.error = () => {};
 dotenv.config();
+console.log = originalLog;
+console.error = originalError;
 
 class FlexiLBApiClient {
   constructor() {

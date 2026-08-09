@@ -1,27 +1,22 @@
-import express from 'express';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import dotenv from 'dotenv';
-import cors from 'cors';
 import flexilbClient from './flexilbApiClient.js';
 import { loadBalancerTools } from './tools/loadBalancerTools.js';
 import { metricsTools } from './tools/metricsTools.js';
 import { healthCheckTools } from './tools/healthCheckTools.js';
 import { alertTools } from './tools/alertTools.js';
 
-dotenv.config();
-
-const app = express();
-const PORT = process.env.MCP_SERVER_PORT || 4000;
-const HOST = process.env.MCP_SERVER_HOST || 'localhost';
-
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Suppress all console output to avoid stdio pollution
+const originalLog = console.log;
+const originalError = console.error;
+const originalWarn = console.warn;
+console.log = () => {};
+console.error = () => {};
+console.warn = () => {};
 
 // Create MCP Server
 const server = new Server(
@@ -87,36 +82,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-// Express health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', service: 'FlexiLB MCP Server' });
-});
-
-// Express tools list endpoint (for debugging)
-app.get('/tools', (req, res) => {
-  res.json({
-    tools: allTools.map(tool => ({
-      name: tool.name,
-      description: tool.description,
-    })),
-  });
-});
-
-// Start Express server
-app.listen(PORT, HOST, () => {
-  console.log(`FlexiLB MCP Server running on http://${HOST}:${PORT}`);
-  console.log(`Health check: http://${HOST}:${PORT}/health`);
-  console.log(`Available tools: http://${HOST}:${PORT}/tools`);
-});
-
 // Start MCP server with stdio transport
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('FlexiLB MCP Server running on stdio');
 }
 
 main().catch((error) => {
-  console.error('Server error:', error);
   process.exit(1);
 });
