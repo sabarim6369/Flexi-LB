@@ -12,7 +12,7 @@ const app = new Hono();
 app.use(
   "/*",
   cors({
-    origin: "*", // Or specify your frontend URL explicitly: ["https://flexilb.vercel.app", "http://localhost:5173"]
+    origin: ["https://flexilb.vercel.app", "http://localhost:5173"], // Explicitly set allowed origins
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     exposeHeaders: ["Content-Length"],
