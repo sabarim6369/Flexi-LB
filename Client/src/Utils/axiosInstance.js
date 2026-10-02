@@ -3,7 +3,7 @@ import axios from "axios";
 import { getToken } from "./token";
 
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.PROD ? "https://flexilb.onrender.com" : "http://localhost:3003", // dynamically switches based on environment
+  baseURL: "https://flexilb.onrender.com",
 });
 
 // Add token automatically for each request
