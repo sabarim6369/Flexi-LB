@@ -10,7 +10,15 @@ import { proxyRequest} from "./Controllers/lbController.js"
 const app = new Hono();
 
 app.use("*", async (c, next) => {
-  c.header("Access-Control-Allow-Origin", "*");
+  const origin = c.req.header("origin");
+  // The browser STRICTLY forbids using '*' when credentials are true in production
+  // We must echo back the exact origin that made the request
+  if (origin) {
+    c.header("Access-Control-Allow-Origin", origin);
+  } else {
+    c.header("Access-Control-Allow-Origin", "*");
+  }
+  
   c.header(
     "Access-Control-Allow-Headers",
     "Content-Type, Authorization"
@@ -19,6 +27,7 @@ app.use("*", async (c, next) => {
     "Access-Control-Allow-Methods",
     "GET, POST, PUT, DELETE, OPTIONS"
   );
+  c.header("Access-Control-Allow-Credentials", "true");
 
   if (c.req.method === "OPTIONS") return c.text("", 204);
 
