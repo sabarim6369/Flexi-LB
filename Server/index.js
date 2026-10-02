@@ -10,25 +10,21 @@ import { proxyRequest} from "./Controllers/lbController.js"
 const app = new Hono();
 
 app.use("*", async (c, next) => {
-  const origin = c.req.header("origin");
-  // Echo the exact origin of the request to allow credentials securely
-  if (origin) {
-    c.header("Access-Control-Allow-Origin", origin);
-  } else {
-    c.header("Access-Control-Allow-Origin", "https://flexilb.vercel.app");
-  }
-  
-  c.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  c.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  c.header("Access-Control-Allow-Credentials", "true");
+  c.header("Access-Control-Allow-Origin", "*");
+  c.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+  c.header(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, OPTIONS"
+  );
 
-  // Immediately respond to preflight requests
-  if (c.req.method === "OPTIONS") {
-    return new Response(null, { status: 204 });
-  }
+  if (c.req.method === "OPTIONS") return c.text("", 204);
 
   await next();
 });
+
 
 require("./Services/EmailService.js")
 app.route("/auth", authRoutes);
