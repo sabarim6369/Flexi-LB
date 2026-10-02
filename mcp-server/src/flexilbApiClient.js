@@ -12,8 +12,8 @@ console.error = originalError;
 
 class FlexiLBApiClient {
   constructor() {
-    this.baseURL = process.env.FLEXILB_API_URL || 'http://localhost:3000';
-    this.apiToken = process.env.FLEXILB_API_TOKEN || '';
+    this.baseURL = process.env.FLEXILB_API_URL || 'http://localhost:3003';
+    this.apiToken = process.env.FLEXILB_API_TOKEN || null;
     
     this.client = axios.create({
       baseURL: this.baseURL,
@@ -24,10 +24,38 @@ class FlexiLBApiClient {
     });
   }
 
+  // Method to set authentication token dynamically
+  setAuthToken(token) {
+    this.apiToken = token;
+    this.client = axios.create({
+      baseURL: this.baseURL,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+  }
+
+  // Method to clear authentication
+  clearAuth() {
+    this.apiToken = null;
+    this.client = axios.create({
+      baseURL: this.baseURL,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+  }
+
+  // Check if authenticated
+  isAuthenticated() {
+    return !!this.apiToken;
+  }
+
   // Load Balancer Operations
   async listLoadBalancers() {
     try {
-      const response = await this.client.get('/api/lb');
+      const response = await this.client.get('/lbs');
       return response.data;
     } catch (error) {
       throw new Error(`Failed to list load balancers: ${error.message}`);
@@ -36,7 +64,7 @@ class FlexiLBApiClient {
 
   async getLoadBalancer(lbId) {
     try {
-      const response = await this.client.get(`/api/lb/${lbId}`);
+      const response = await this.client.get(`/lbs/${lbId}`);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to get load balancer: ${error.message}`);
@@ -45,7 +73,7 @@ class FlexiLBApiClient {
 
   async createLoadBalancer(lbData) {
     try {
-      const response = await this.client.post('/api/lb', lbData);
+      const response = await this.client.post('/lbs', lbData);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to create load balancer: ${error.message}`);
@@ -54,7 +82,7 @@ class FlexiLBApiClient {
 
   async updateLoadBalancer(lbId, lbData) {
     try {
-      const response = await this.client.put(`/api/lb/${lbId}`, lbData);
+      const response = await this.client.put(`/lbs/${lbId}`, lbData);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to update load balancer: ${error.message}`);
@@ -63,7 +91,7 @@ class FlexiLBApiClient {
 
   async deleteLoadBalancer(lbId) {
     try {
-      const response = await this.client.delete(`/api/lb/${lbId}`);
+      const response = await this.client.delete(`/lbs/${lbId}`);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to delete load balancer: ${error.message}`);
@@ -73,7 +101,7 @@ class FlexiLBApiClient {
   // Instance Operations
   async addInstance(lbId, instanceData) {
     try {
-      const response = await this.client.post(`/api/lb/${lbId}/instances`, instanceData);
+      const response = await this.client.post(`/lbs/${lbId}/instances`, instanceData);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to add instance: ${error.message}`);
@@ -82,7 +110,7 @@ class FlexiLBApiClient {
 
   async updateInstance(lbId, instanceData) {
     try {
-      const response = await this.client.put(`/api/lb/${lbId}/instances`, instanceData);
+      const response = await this.client.put(`/lbs/${lbId}/instances`, instanceData);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to update instance: ${error.message}`);
@@ -91,7 +119,7 @@ class FlexiLBApiClient {
 
   async removeInstance(lbId, instanceData) {
     try {
-      const response = await this.client.delete(`/api/lb/${lbId}/instances`, { data: instanceData });
+      const response = await this.client.delete(`/lbs/${lbId}/instances`, { data: instanceData });
       return response.data;
     } catch (error) {
       throw new Error(`Failed to remove instance: ${error.message}`);
@@ -101,7 +129,7 @@ class FlexiLBApiClient {
   // Metrics Operations
   async getOverallMetrics() {
     try {
-      const response = await this.client.get('/api/lb/data/overallmetrics');
+      const response = await this.client.get('/lbs/data/overallmetrics');
       return response.data;
     } catch (error) {
       throw new Error(`Failed to get overall metrics: ${error.message}`);
@@ -110,7 +138,7 @@ class FlexiLBApiClient {
 
   async getLoadBalancerMetrics(lbId) {
     try {
-      const response = await this.client.get(`/api/lb/${lbId}/metrics`);
+      const response = await this.client.get(`/lbs/${lbId}/metrics`);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to get load balancer metrics: ${error.message}`);
@@ -119,7 +147,7 @@ class FlexiLBApiClient {
 
   async getHourlyRequests(lbId) {
     try {
-      const response = await this.client.get(`/api/lb/${lbId}/hourlyreq`);
+      const response = await this.client.get(`/lbs/${lbId}/hourlyreq`);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to get hourly requests: ${error.message}`);
@@ -129,7 +157,7 @@ class FlexiLBApiClient {
   // Rate Limiter Operations
   async setRateLimit(lbId, rateLimitData) {
     try {
-      const response = await this.client.post(`/api/lb/${lbId}/ratelimit`, rateLimitData);
+      const response = await this.client.post(`/lbs/${lbId}/ratelimit`, rateLimitData);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to set rate limit: ${error.message}`);
@@ -138,7 +166,7 @@ class FlexiLBApiClient {
 
   async getRateLimit(lbId) {
     try {
-      const response = await this.client.get(`/api/lb/${lbId}/ratelimit`);
+      const response = await this.client.get(`/lbs/${lbId}/ratelimit`);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to get rate limit: ${error.message}`);
@@ -147,7 +175,7 @@ class FlexiLBApiClient {
 
   async updateRateLimit(lbId, rateLimitData) {
     try {
-      const response = await this.client.put(`/api/lb/${lbId}/ratelimit`, rateLimitData);
+      const response = await this.client.put(`/lbs/${lbId}/ratelimit`, rateLimitData);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to update rate limit: ${error.message}`);
@@ -156,7 +184,7 @@ class FlexiLBApiClient {
 
   async disableRateLimit(lbId) {
     try {
-      const response = await this.client.delete(`/api/lb/${lbId}/ratelimit`);
+      const response = await this.client.delete(`/lbs/${lbId}/ratelimit`);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to disable rate limit: ${error.message}`);
@@ -165,7 +193,7 @@ class FlexiLBApiClient {
 
   async getRateLimiterStatus() {
     try {
-      const response = await this.client.get('/api/lb/ratelimiter/status');
+      const response = await this.client.get('/lbs/ratelimiter/status');
       return response.data;
     } catch (error) {
       throw new Error(`Failed to get rate limiter status: ${error.message}`);

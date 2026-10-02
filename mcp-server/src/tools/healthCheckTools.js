@@ -22,6 +22,9 @@ export const healthCheckTools = [
       required: ['lbId', 'instanceName'],
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       return await client.checkInstanceHealth(args.lbId, args.instanceName);
     },
   },
@@ -39,6 +42,9 @@ export const healthCheckTools = [
       required: ['lbId'],
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       return await client.checkAllInstancesHealth(args.lbId);
     },
   },
@@ -56,6 +62,9 @@ export const healthCheckTools = [
       required: ['lbId'],
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       const lb = await client.getLoadBalancer(args.lbId);
       const instances = lb.instances || [];
 
@@ -106,6 +115,9 @@ export const healthCheckTools = [
       properties: {},
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       const loadBalancers = await client.listLoadBalancers();
 
       const healthReports = await Promise.all(

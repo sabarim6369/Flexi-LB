@@ -31,6 +31,9 @@ export const alertTools = [
       },
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       return await client.getAlerts(args);
     },
   },
@@ -48,6 +51,9 @@ export const alertTools = [
       required: ['alertId'],
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       return await client.getAlert(args.alertId);
     },
   },
@@ -92,6 +98,9 @@ export const alertTools = [
       required: ['name', 'loadBalancerId', 'type', 'threshold', 'condition', 'severity'],
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       return await client.createAlert(args);
     },
   },
@@ -109,6 +118,9 @@ export const alertTools = [
       required: ['alertId'],
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       return await client.acknowledgeAlert(args.alertId);
     },
   },
@@ -126,6 +138,9 @@ export const alertTools = [
       required: ['alertId'],
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       return await client.resolveAlert(args.alertId);
     },
   },
@@ -143,6 +158,9 @@ export const alertTools = [
       required: ['alertId'],
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       return await client.deleteAlert(args.alertId);
     },
   },
@@ -154,6 +172,9 @@ export const alertTools = [
       properties: {},
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       const alerts = await client.getAlerts({ status: 'active' });
 
       const alertsBySeverity = {

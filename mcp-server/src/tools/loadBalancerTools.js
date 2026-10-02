@@ -12,6 +12,9 @@ export const loadBalancerTools = [
       properties: {},
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       return await client.listLoadBalancers();
     },
   },
@@ -29,6 +32,9 @@ export const loadBalancerTools = [
       required: ['lbId'],
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       return await client.getLoadBalancer(args.lbId);
     },
   },
@@ -63,6 +69,9 @@ export const loadBalancerTools = [
       required: ['name', 'algorithm'],
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       return await client.createLoadBalancer(args);
     },
   },
@@ -89,6 +98,9 @@ export const loadBalancerTools = [
       required: ['lbId'],
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       const { lbId, ...updateData } = args;
       return await client.updateLoadBalancer(lbId, updateData);
     },
@@ -107,6 +119,9 @@ export const loadBalancerTools = [
       required: ['lbId'],
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       return await client.deleteLoadBalancer(args.lbId);
     },
   },
@@ -136,6 +151,9 @@ export const loadBalancerTools = [
       required: ['lbId', 'url', 'name'],
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       const { lbId, ...instanceData } = args;
       return await client.addInstance(lbId, instanceData);
     },
@@ -170,6 +188,9 @@ export const loadBalancerTools = [
       required: ['lbId', 'instanceName'],
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       const { lbId, ...instanceData } = args;
       return await client.updateInstance(lbId, instanceData);
     },
@@ -192,6 +213,9 @@ export const loadBalancerTools = [
       required: ['lbId', 'instanceName'],
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       return await client.removeInstance(args.lbId, { instanceName: args.instanceName });
     },
   },

@@ -12,6 +12,9 @@ export const metricsTools = [
       properties: {},
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       return await client.getOverallMetrics();
     },
   },
@@ -29,6 +32,9 @@ export const metricsTools = [
       required: ['lbId'],
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       return await client.getLoadBalancerMetrics(args.lbId);
     },
   },
@@ -46,6 +52,9 @@ export const metricsTools = [
       required: ['lbId'],
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       return await client.getHourlyRequests(args.lbId);
     },
   },
@@ -63,6 +72,9 @@ export const metricsTools = [
       required: ['lbId'],
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       const lb = await client.getLoadBalancer(args.lbId);
       const instances = lb.instances || [];
 
@@ -103,6 +115,9 @@ export const metricsTools = [
       },
     },
     handler: async (args, client) => {
+      if (!client.isAuthenticated()) {
+        throw new Error('Not authenticated. Please use the login tool first.');
+      }
       const overallMetrics = await client.getOverallMetrics();
       const loadBalancers = await client.listLoadBalancers();
 

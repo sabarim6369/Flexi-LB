@@ -27,29 +27,31 @@ Add the following configuration to your `claude_desktop_config.json` file:
         "C:\\Users\\sabar\\Documents\\Projects\\Flexi-LB\\mcp-server\\src\\index.js"
       ],
       "env": {
-        "FLEXILB_API_URL": "http://localhost:3000",
-        "FLEXILB_API_TOKEN": ""
+        "FLEXILB_API_URL": "http://localhost:3003"
       }
     }
   }
 }
 ```
 
-**Important:** Update the path in `args` to match your actual file path if different.
+**Important:**
+- Update the path in `args` to match your actual file path if different
+- Update `FLEXILB_API_URL` to match your FlexiLB server port (default: 3003)
+- **No authentication token needed** - the MCP server uses dynamic authentication
 
-### 3. Start Your FlexiLB Server
+### 4. Start Your FlexiLB Server
 
-Make sure your main FlexiLB server is running on port 3000:
+Make sure your main FlexiLB server is running on port 3003:
 ```bash
 cd C:\Users\sabar\Documents\Projects\Flexi-LB\Server
 npm start
 ```
 
-### 4. Restart Claude Desktop
+### 5. Restart Claude Desktop
 
 Close and reopen Claude Desktop for the configuration to take effect.
 
-### 5. Test the MCP Tools
+### 6. Test the MCP Tools
 
 In Claude Desktop, you can now use the following tools:
 
@@ -85,14 +87,27 @@ In Claude Desktop, you can now use the following tools:
 - `delete_alert` - Delete an alert
 - `get_active_alerts_summary` - Get active alerts summary
 
+#### Authentication:
+- `login` - Login with email/password to authenticate dynamically
+- `verify_token` - Verify if current authentication is valid
+- `get_current_user` - Get current authenticated user information
+- `check_auth_status` - Check if currently authenticated
+
 ### Example Usage in Claude Desktop
 
-Try asking Claude:
+**First, authenticate yourself:**
+- "Login with email myemail@example.com and password mypassword"
+- "Check my authentication status"
+- "Get my current user information"
+
+**Then use the load balancer tools:**
 - "Show me all my load balancers"
 - "Check the health of all my load balancers"
 - "Get the metrics for load balancer with ID [your-lb-id]"
 - "Create a new load balancer named 'my-lb' with round-robin algorithm"
 - "Analyze the traffic patterns across my load balancers"
+
+**Note:** The login tool automatically sets the authentication token for subsequent API calls. You don't need to manually configure any tokens.
 
 ### Troubleshooting
 
@@ -103,9 +118,10 @@ Try asking Claude:
 4. Check Claude Desktop logs for errors
 
 #### If API calls fail:
-1. Ensure FlexiLB server is running on port 3000
-2. Check if authentication is required and set `FLEXILB_API_TOKEN`
+1. Ensure FlexiLB server is running on port 3003
+2. Use the login tool first: "Login with email your@email.com and password yourpassword"
 3. Verify the `FLEXILB_API_URL` is correct
+4. Check authentication status: "Check my authentication status"
 
 #### Testing the server directly:
 You can test the MCP server directly:

@@ -9,6 +9,7 @@ import { loadBalancerTools } from './tools/loadBalancerTools.js';
 import { metricsTools } from './tools/metricsTools.js';
 import { healthCheckTools } from './tools/healthCheckTools.js';
 import { alertTools } from './tools/alertTools.js';
+import { authTools } from './tools/authTools.js';
 
 // Suppress all console output to avoid stdio pollution
 const originalLog = console.log;
@@ -33,6 +34,7 @@ const server = new Server(
 
 // Combine all tools
 const allTools = [
+  ...authTools,
   ...loadBalancerTools,
   ...metricsTools,
   ...healthCheckTools,
