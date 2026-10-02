@@ -9,17 +9,26 @@ import { startHealthChecks } from "./Services/Healthcheckservice";
 import { proxyRequest} from "./Controllers/lbController.js"
 const app = new Hono();
 
-app.use(
-  "/*",
-  cors({
-    origin: ["https://flexilb.vercel.app", "http://localhost:5173"], // Explicitly set allowed origins
-    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization"],
-    exposeHeaders: ["Content-Length"],
-    maxAge: 600,
-    credentials: true,
-  })
-);
+app.use("*", async (c, next) => {
+  const origin = c.req.header("origin");
+  // Echo the exact origin of the request to allow credentials securely
+  if (origin) {
+    c.header("Access-Control-Allow-Origin", origin);
+  } else {
+    c.header("Access-Control-Allow-Origin", "https://flexilb.vercel.app");
+  }
+  
+  c.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  c.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  c.header("Access-Control-Allow-Credentials", "true");
+
+  // Immediately respond to preflight requests
+  if (c.req.method === "OPTIONS") {
+    return new Response(null, { status: 204 });
+  }
+
+  await next();
+});
 
 require("./Services/EmailService.js")
 app.route("/auth", authRoutes);
